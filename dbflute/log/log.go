@@ -6,6 +6,8 @@ import (
 	"fmt"
 )
 var ConfigFile="seelog.xml"
+var InternalDebugFlag = false
+var InternalDebugTest = false
 var isEnabled = true
 
 var charCode = "sjis"
@@ -36,6 +38,15 @@ func init() {
 	}
 
 	seelog.ReplaceLogger(logger)
+}
+
+func InternalDebug(log string) {
+	if InternalDebugTest {
+		fmt.Println("InternalDebug"+":"+log)
+	} else {
+	seelog.Debug(time.Now().Format(timeFormat),
+		"InternalDebug"+":"+convErr(log))
+	}
 }
 func Flush() {
 	seelog.Flush()
