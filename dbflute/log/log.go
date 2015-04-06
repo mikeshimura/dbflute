@@ -19,16 +19,7 @@ func SetCharCode(code string) {
 func SetTimeFormat(format string) {
 	timeFormat = format
 }
-func Init() {
-	fmt.Println("Log Init")
-	logger, err := seelog.LoggerFromConfigAsFile(ConfigFile)
 
-	if err != nil {
-		fmt.Println("df006:fail to load log config")
-	}
-
-	seelog.ReplaceLogger(logger)
-}
 func init() {
 	fmt.Println("Log Init")
 	logger, err := seelog.LoggerFromConfigAsFile(ConfigFile)
@@ -38,11 +29,15 @@ func init() {
 	}
 
 	seelog.ReplaceLogger(logger)
+
 }
 
 func InternalDebug(log string) {
+	if InternalDebugFlag==false{
+		return
+	}
 	if InternalDebugTest {
-		fmt.Println("InternalDebug"+":"+log)
+		fmt.Println("InternalDebug"+":"+convErr(log))
 	} else {
 	seelog.Debug(time.Now().Format(timeFormat),
 		"InternalDebug"+":"+convErr(log))
@@ -71,22 +66,22 @@ func Critical(pack string, log string) {
 	seelog.Critical(time.Now().Format(timeFormat),
 		" "+pack+":"+log)
 }
-func UtfInfo(pack string, log string) {
+func InfoConv(pack string, log string) {
 	seelog.Info(time.Now(), " "+pack+":"+convErr(log))
 }
-func UtfDebug(pack string, log string) {
+func DebugConv(pack string, log string) {
 	seelog.Debug(time.Now().Format(timeFormat),
 		" "+pack+":"+convErr(log))
 }
-func UtfWarn(pack string, log string) {
+func WarnConv(pack string, log string) {
 	seelog.Warn(time.Now().Format(timeFormat),
 		" "+pack+":"+convErr(log))
 }
-func UtfError(pack string, log string) {
+func ErrorConv(pack string, log string) {
 	seelog.Error(time.Now().Format(timeFormat),
 		" "+pack+":"+convErr(log))
 }
-func UtfCritical(pack string, log string) {
+func CriticalConv(pack string, log string) {
 	seelog.Critical(time.Now().Format(timeFormat),
 		" "+pack+":"+convErr(log))
 }

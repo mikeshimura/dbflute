@@ -13,6 +13,7 @@ type DBDef interface {
 }
 
 type PostgreSQL struct {
+
 }
 
 func (w *PostgreSQL) Code() string {
@@ -20,6 +21,26 @@ func (w *PostgreSQL) Code() string {
 }
 func (w *PostgreSQL) CodeAlias() string {
 	return "postgre"
+}
+type MySQL struct {
+
+}
+
+func (w *MySQL) Code() string {
+	return "mysql"
+}
+func (w *MySQL) CodeAlias() string {
+	return ""
+}
+type SQLServer struct {
+
+}
+
+func (w *SQLServer) Code() string {
+	return "sqlserver"
+}
+func (w *SQLServer) CodeAlias() string {
+	return "mssql"
 }
 
 func Lock() {
@@ -47,3 +68,4 @@ func assertUnlocked() error {
 	}
 	return errors.New("df004:The DB definition is locked.")
 }
+
