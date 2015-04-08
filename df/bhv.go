@@ -275,7 +275,20 @@ type TnStatementFactoryImpl struct {
 }
 
 func (t *TnStatementFactoryImpl) ModifyBindVariables(bindVariables *List, bindVariableTypes *StringList) *List {
-	//NullNumeric等対応要
+	if bindVariables==nil{
+		return bindVariables
+	}
+	//convert df.NullString to sql.NullString
+	for i,item:=range bindVariables.data{
+		stype:=GetType(item)
+		if stype=="df.NullString" {
+			var dns NullString=item.(NullString)
+			ns:=new(sql.NullString)
+			ns.Valid=dns.Valid
+			ns.String=dns.String
+			bindVariables.data[i]=ns
+		}
+	}
 	return bindVariables
 }
 func (t *TnStatementFactoryImpl) PrepareStatement(orgSql string, tx *sql.Tx, dbc *DBCurrent) (*sql.Stmt, error) {

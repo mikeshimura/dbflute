@@ -225,13 +225,13 @@ func InterfaceToStringQuote(arg interface{}) string {
 	case NullString:
 		nsv := arg.(NullString)
 		if nsv.Valid {
-			return Quote(nsv.Svalue)
+			return Quote(nsv.String)
 		}
 		return "null"
 	case *NullString:
 		nsv := arg.(*NullString)
 		if nsv.Valid {
-			return Quote((*nsv).Svalue)
+			return Quote((*nsv).String)
 		}
 		return "null"
 	case pq.NullTime:
@@ -526,13 +526,13 @@ func InterfaceToString(arg interface{}) string {
 	case NullString:
 		nsv := arg.(NullString)
 		if nsv.Valid {
-			return nsv.Svalue
+			return nsv.String
 		}
 		return "null"
 	case *NullString:
 		nsv := arg.(*NullString)
 		if nsv.Valid {
-			return (*nsv).Svalue
+			return (*nsv).String
 		}
 		return "null"
 	case pq.NullTime:

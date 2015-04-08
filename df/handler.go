@@ -35,15 +35,12 @@ func (t *TnBasicUpdateHandler) execute(bindVariables *List, bindVariableTypes *S
 	//	ns.String="2"
 	//	var itest interface{}=ns
 	t.logSql(bindVariables, bindVariableTypes)
-
 	res, err1 := tx.Stmt(ps).Exec(bindVar.data...)
-	updateno, _ := res.RowsAffected()
-
 	if err1 != nil {
 		DFErrorLog(err1.Error())
 		return 0, err1
 	}
-
+	updateno, _ := res.RowsAffected()
 	log.InternalDebug(fmt.Sprintln("result no:", updateno))
 
 	//        logSql(args, argTypes);

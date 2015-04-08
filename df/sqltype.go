@@ -73,7 +73,7 @@ func (nn Numeric) Value() (driver.Value, error) {
 }
 
 type NullString struct {
-	Svalue string //total value 10.50 -> 1050
+	String string //total value 10.50 -> 1050
 	Valid  bool   // Valid is true if Value not null
 }
 
@@ -86,28 +86,28 @@ func (nn *NullString) Scan(value interface{}) error {
 	switch value.(type) {
 	case string:
 		var svalue = value.(string)
-		nn.Svalue = svalue
+		nn.String = svalue
 		return nil
 	case time.Time:
 		var tvalue time.Time = value.(time.Time)
-		nn.Svalue = tvalue.Format(DISP_SQL_DEFAULT_DATE_FORMAT)
+		nn.String = tvalue.Format(DISP_SQL_DEFAULT_DATE_FORMAT)
+		return nil
+	case []uint8:
+		nn.String = (string)(value.([]uint8))
 		return nil
 	}
 	panic("this type not supported :" + fmt.Sprintf("%T", value))
 	return nil
 }
-func (nn *NullString) String() string {
-	if !nn.Valid {
-		return "null"
-	}
-	return nn.Svalue
-}
 func (nn *NullString) Value() (driver.Value, error) {
 	if !nn.Valid {
 		return nil, nil
 	}
-	return nn.Svalue, nil
+	var sv []uint8
+	sv = ([]uint8)(nn.String)
+	return sv, nil
 }
+
 type NullNumeric struct {
 	IntValue int64 //total value 10.50 -> 1050
 	DecPoint int   //decimal point numeric(10,2) -> 2

@@ -652,6 +652,9 @@ func (o *OutsideSqlBasicExecutor) doExecute(path string, pmb interface{}, tx *sq
 	}
 	cmd := o.createExecuteCommand(fullpath, pmb, tx)
 	res, err := o.behaviorCommandInvoker.Invoke(cmd)
+	if err !=nil{
+		return 0,err
+	}
 	var lres int64 = res.(int64)
 	return lres, err
 }
