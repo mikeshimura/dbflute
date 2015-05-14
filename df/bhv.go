@@ -20,11 +20,12 @@ import (
 	"errors"
 	"fmt"
 	"github.com/mikeshimura/dbflute/log"
+	"reflect"
 )
 
 type Behavior interface {
 	GetBaseBehavior() *BaseBehavior
-	ReadNextVal(tx *sql.Tx) (int64, error)
+	ReadNextVal(tx *sql.Tx) int64
 	GetDBMeta() *DBMeta
 }
 type BaseBehavior struct {
@@ -33,83 +34,123 @@ type BaseBehavior struct {
 	Behavior               *Behavior
 }
 
-func (b *BaseBehavior) DoSelectList(cb interface{}, entityType string, tx *sql.Tx) (*ListResultBean, error) {
+func (b *BaseBehavior) DoSelectCount(cb interface{},
+	tx *sql.Tx) (reult int64, errrtn error) {
+	var err error
+	defer func() {
+		errx := recover()
+		if errx != nil {
+			errrtn = errors.New(errx.(string))
+		}
+	}()
+	cbbase := reflect.ValueOf(cb).Elem().FieldByName("BaseConditionBean").Interface()
+	var base *BaseConditionBean = cbbase.(*BaseConditionBean)
+	(*base.SqlClause).GetBaseSqlClause().selectClauseType = Create_SelectClauseType(
+		SelectClauseType_UNIQUE_COUNT)
+	cmd := b.CreateSelectListCBCommand(cb, "D_Int64", tx)
+	var behcmd BehaviorCommand = cmd
+	invres := b.Invoke(&behcmd)
+	if invres == nil {
+		return 0, err
+	}
+	res:=invres.(*ListResultBean)
+	return (res.List.Get(0)).(*D_Int64).GetValue(), err
+}
+
+func (b *BaseBehavior) DoSelectList(cb interface{}, entityType string,
+	tx *sql.Tx) (bean *ListResultBean, errrtn error) {
+	var err error
+	defer func() {
+		errx := recover()
+		if errx != nil {
+			errrtn = errors.New(errx.(string))
+		}
+	}()
 	cmd := b.CreateSelectListCBCommand(cb, entityType, tx)
 	var behcmd BehaviorCommand = cmd
-	invres, err := b.Invoke(&behcmd)
-	if invres==nil{
-		return nil,err
+	invres := b.Invoke(&behcmd)
+	if invres == nil {
+		return nil, err
 	}
 	return invres.(*ListResultBean), err
 }
-func (b *BaseBehavior) ReadNextVal(tx *sql.Tx) (int64, error) {
-	return -1, nil
+func (b *BaseBehavior) ReadNextVal(tx *sql.Tx) int64 {
+
+	return -1
 }
 func (b *BaseBehavior) DoOutsideSql() *OutsideSqlBasicExecutor {
-	return b.BehaviorCommandInvoker.createOutsideSqlBasicExecutor(b.AsTableDbName(), b.Behavior)
+	return b.BehaviorCommandInvoker.createOutsideSqlBasicExecutor(
+		b.AsTableDbName(), b.Behavior)
 }
 func (b *BaseBehavior) AsTableDbName() string {
 	return b.TableDbName
 }
 
-func (b *BaseBehavior) DoSelectNextVal(tx *sql.Tx) (int64, error) {
-	invres, err1 := b.Invoke(b.createSelectNextValCommand(tx))
-	if err1 != nil {
-		return 0, err1
-	}
+func (b *BaseBehavior) DoSelectNextVal(tx *sql.Tx) int64 {
+	invres := b.Invoke(b.createSelectNextValCommand(tx))
 	res := invres.(*ListResultBean)
 	var ent *D_Int64 = (res.List.Get(0)).(*D_Int64)
-	return ent.value, nil
+	return ent.value
 }
-func (b *BaseBehavior) DoDelete(entity *Entity, option *DeleteOption, tx *sql.Tx) (int64, error) {
+func (b *BaseBehavior) DoDelete(entity *Entity, option *DeleteOption,
+	tx *sql.Tx, ctx *Context) (no int64, errrtn error) {
+	var err error
+	defer func() {
+		errx := recover()
+		if errx != nil {
+			errrtn = errors.New(errx.(string))
+		}
+	}()
+	res := b.processBeforeDelete(entity, option, tx, ctx)
 
-	res, err := b.processBeforeDelete(entity, option, tx)
-
-	if err != nil {
-		return 0, err
-	}
 	if !res {
-		return 0, nil
+		return 0, err
 	}
 	var invres interface{}
-	invres, err1 := b.Invoke(b.createDeleteEntityCommand(entity, option, tx))
-	if err1 != nil {
-		return 0, err1
-	}
-	return invres.(int64), err1
+	invres = b.Invoke(b.createDeleteEntityCommand(entity, option, tx))
+	return invres.(int64), err
 }
-func (b *BaseBehavior) DoInsert(entity *Entity, option *InsertOption, tx *sql.Tx) (int64, error) {
+func (b *BaseBehavior) DoInsert(entity *Entity, option *InsertOption,
+	tx *sql.Tx, ctx *Context) (no int64, errrtn error) {
+	var err error
+	defer func() {
+		errx := recover()
+		if errx != nil {
+			fmt.Printf("errx%v %T \n", errx, errx)
+			errrtn = errors.New(errx.(string))
+		}
+	}()
+	res := b.processBeforeInsert(entity, option, tx, ctx)
 
-	res, err := b.processBeforeInsert(entity, option, tx)
-
-	if err != nil {
-		return 0, err
-	}
 	if !res {
-		return 0, nil
+		return 0, err
 	}
 	var invres interface{}
-	invres, err1 := b.Invoke(b.createInsertEntityCommand(entity, option, tx))
-	if err1 != nil {
-		return 0, err1
-	}
-	return invres.(int64), err1
+	invres = b.Invoke(b.createInsertEntityCommand(entity, option, tx))
+	return invres.(int64), err
 }
-func (b *BaseBehavior) DoUpdate(entity *Entity, option *UpdateOption, tx *sql.Tx) (int64, error) {
-	res, err := b.processBeforeUpdate(entity, option)
-	if err != nil {
+func (b *BaseBehavior) DoUpdate(entity *Entity, option *UpdateOption,
+	tx *sql.Tx, ctx *Context) (no int64, errrtn error) {
+	var err error
+	defer func() {
+		errx := recover()
+		if errx != nil {
+			errrtn = errors.New(errx.(string))
+		}
+	}()
+	res := b.processBeforeUpdate(entity, option, ctx)
+	if !res {
 		return 0, err
 	}
-	if !res {
-		return 0, nil
+	var invres interface{}
+	invres = b.Invoke(b.createUpdateEntityCommand(entity, option, tx))
+	if invres == nil {
+		return 0, err
 	}
-	invres, err1 := b.Invoke(b.createUpdateEntityCommand(entity, option, tx))
-	if err1 != nil {
-		return 0, err1
-	}
-	return invres.(int64), err1
+	return invres.(int64), err
 }
-func (b *BaseBehavior) createDeleteEntityCommand(entity *Entity, option *DeleteOption, tx *sql.Tx) *BehaviorCommand {
+func (b *BaseBehavior) createDeleteEntityCommand(entity *Entity, option *DeleteOption,
+	tx *sql.Tx) *BehaviorCommand {
 	cmd := new(DeleteEntityCommand)
 	cmd.entity = entity
 	cmd.tx = tx
@@ -119,7 +160,8 @@ func (b *BaseBehavior) createDeleteEntityCommand(entity *Entity, option *DeleteO
 	cmd.BehaviorCommand = &bc
 	return &bc
 }
-func (b *BaseBehavior) createInsertEntityCommand(entity *Entity, option *InsertOption, tx *sql.Tx) *BehaviorCommand {
+func (b *BaseBehavior) createInsertEntityCommand(entity *Entity,
+	option *InsertOption, tx *sql.Tx) *BehaviorCommand {
 	cmd := new(InsertEntityCommand)
 	cmd.entity = entity
 	cmd.tx = tx
@@ -138,7 +180,8 @@ func (b *BaseBehavior) createSelectNextValCommand(tx *sql.Tx) *BehaviorCommand {
 	var bc BehaviorCommand = cmd
 	return &bc
 }
-func (b *BaseBehavior) createUpdateEntityCommand(entity *Entity, option *UpdateOption, tx *sql.Tx) *BehaviorCommand {
+func (b *BaseBehavior) createUpdateEntityCommand(entity *Entity, option *UpdateOption,
+	tx *sql.Tx) *BehaviorCommand {
 
 	//	        assertBehaviorCommandInvoker("createUpdateEntityCommand");
 	cmd := new(UpdateEntityCommand)
@@ -150,22 +193,20 @@ func (b *BaseBehavior) createUpdateEntityCommand(entity *Entity, option *UpdateO
 	var bcmd BehaviorCommand = cmd
 	return &bcmd
 }
-func (b *BaseBehavior) processBeforeDelete(entity *Entity, option *DeleteOption, tx *sql.Tx) (bool, error) {
+func (b *BaseBehavior) processBeforeDelete(entity *Entity, option *DeleteOption,
+	tx *sql.Tx, ctx *Context) bool {
 
 	//        filterEntityOfDelete(entity, option);
 	//        assertEntityOfDelete(entity, option);
 	//        return true;
-	err := b.frameworkFilterEntityOfDelete(entity, option, tx)
-	if err != nil {
-		return true, err
-	}
+	b.frameworkFilterEntityOfDelete(entity, option, tx, ctx)
 	if !(*(*entity).GetDBMeta()).HasIdentity() {
 		b.assertEntityNotNullAndHasPrimaryKeyValue(entity)
 	}
-
-	return true, nil
+	return true
 }
-func (b *BaseBehavior) processBeforeInsert(entity *Entity, option *InsertOption, tx *sql.Tx) (bool, error) {
+func (b *BaseBehavior) processBeforeInsert(entity *Entity, option *InsertOption,
+	tx *sql.Tx, ctx *Context) bool {
 	//        assertEntityNotNull(entity); // primary key is checked later
 	//        frameworkFilterEntityOfInsert(entity, option);
 	//        filterEntityOfInsert(entity, option);
@@ -178,57 +219,65 @@ func (b *BaseBehavior) processBeforeInsert(entity *Entity, option *InsertOption,
 	//        }
 	//        return true;
 	if entity == nil {
-		return true, errors.New("Entity Null")
+		panic("Entity Null")
 	}
-	err := b.frameworkFilterEntityOfInsert(entity, option, tx)
-	if err != nil {
-		return true, err
-	}
+	b.frameworkFilterEntityOfInsert(entity, option, tx, ctx)
 	if !(*(*entity).GetDBMeta()).HasIdentity() {
 		b.assertEntityNotNullAndHasPrimaryKeyValue(entity)
 	}
 
-	return true, nil
+	return true
 }
-func (b *BaseBehavior) frameworkFilterEntityOfDelete(entity *Entity, option *DeleteOption, tx *sql.Tx) error {
-	return nil
+func (b *BaseBehavior) frameworkFilterEntityOfDelete(entity *Entity,
+	option *DeleteOption, tx *sql.Tx, ctx *Context) {
+	b.setupCommonColumnOfUpdateIfNeeds(entity, ctx)
+	return
 }
-func (b *BaseBehavior) frameworkFilterEntityOfInsert(entity *Entity, option *InsertOption, tx *sql.Tx) error {
-	return b.injectSequenceToPrimaryKeyIfNeeds(entity, tx)
-	//        setupCommonColumnOfInsertIfNeeds(entity, option);
+func (b *BaseBehavior) frameworkFilterEntityOfInsert(entity *Entity,
+	option *InsertOption, tx *sql.Tx, ctx *Context) {
+	b.injectSequenceToPrimaryKeyIfNeeds(entity, tx)
+	b.setupCommonColumnOfInsertIfNeeds(entity, ctx)
 }
-func (b *BaseBehavior) injectSequenceToPrimaryKeyIfNeeds(entity *Entity, tx *sql.Tx) error {
+func (b *BaseBehavior) setupCommonColumnOfInsertIfNeeds(
+	entity *Entity, ctx *Context) {
+	(*CommonColumnAutoSetupper_I).HandleCommonColumnOfInsertIfNeeds(entity, ctx)
+}
+func (b *BaseBehavior) setupCommonColumnOfUpdateIfNeeds(
+	entity *Entity, ctx *Context) {
+	(*CommonColumnAutoSetupper_I).HandleCommonColumnOfUpdateIfNeeds(entity, ctx)
+}
+func (b *BaseBehavior) injectSequenceToPrimaryKeyIfNeeds(entity *Entity,
+	tx *sql.Tx) {
 	dbmeta := (*entity).GetDBMeta()
 
-	if !(*dbmeta).HasSequence() || (*dbmeta).HasCompoundPrimaryKey() || (*entity).HasPrimaryKeyValue()||  (*dbmeta).HasIdentity(){
-		return nil
+	if !(*dbmeta).HasSequence() || (*dbmeta).HasCompoundPrimaryKey() ||
+		(*entity).HasPrimaryKeyValue() || (*dbmeta).HasIdentity() {
+		return
 	}
 	// basically property(column) type is same as next value type
 	// so there is NOT type conversion cost when writing to the entity
 	col := ((*dbmeta).GetPrimaryUniqueInfo().UniqueColumnList.Get(0)).(*ColumnInfo)
-	nextVal, err := (*b.Behavior).ReadNextVal(tx)
-	if err != nil {
-		return err
-	}
+	nextVal := (*b.Behavior).ReadNextVal(tx)
 	log.InternalDebug("next val " + fmt.Sprintf("%v", nextVal))
 	SetEntityValue(entity, col.PropertyName, nextVal)
-	return nil
+	return
 }
-func (b *BaseBehavior) processBeforeUpdate(entity *Entity, option *UpdateOption) (bool, error) {
-	err := b.assertEntityNotNullAndHasPrimaryKeyValue(entity)
-	if err != nil {
-		return false, err
-	}
-	//未実装 setupCommonColumnOfUpdateIfNeeds
-	//	      frameworkFilterEntityOfUpdate(entity, option);
+func (b *BaseBehavior) processBeforeUpdate(entity *Entity,
+	option *UpdateOption, ctx *Context) bool {
+	b.assertEntityNotNullAndHasPrimaryKeyValue(entity)
+	b.frameworkFilterEntityOfUpdate(entity, option, ctx)
 	//未実装
 	//        filterEntityOfUpdate(entity, option);
-	//未実装
-	return true, nil
+	return true
 }
-func (b *BaseBehavior) assertEntityNotNullAndHasPrimaryKeyValue(entity *Entity) error {
+func (b *BaseBehavior) frameworkFilterEntityOfUpdate(
+	entity *Entity, option *UpdateOption, ctx *Context) {
+	b.setupCommonColumnOfUpdateIfNeeds(entity, ctx)
+}
+func (b *BaseBehavior) assertEntityNotNullAndHasPrimaryKeyValue(
+	entity *Entity) {
 	if entity == nil {
-		return errors.New("Entity nil")
+		panic("Entity nil")
 	}
 	//通常はNULL TYPEで無いのでCK 不要
 	//	if !(*entity).HasPrimaryKeyValue() {
@@ -236,16 +285,17 @@ func (b *BaseBehavior) assertEntityNotNullAndHasPrimaryKeyValue(entity *Entity) 
 	//	}
 
 	//        b.assertEntityOfUpdate(entity, option);
-	return nil
+	return
 }
 func (b *BaseBehavior) GetBehaviorCommandInvoker() *BehaviorCommandInvoker {
 	return b.BehaviorCommandInvoker
 }
-func (b *BaseBehavior) Invoke(cmd *BehaviorCommand) (interface{}, error) {
+func (b *BaseBehavior) Invoke(cmd *BehaviorCommand) interface{} {
 	log.InternalDebug("Invoke")
 	return b.BehaviorCommandInvoker.Invoke(cmd)
 }
-func (b *BaseBehavior) CreateSelectListCBCommand(cb interface{}, entityType string, tx *sql.Tx) *SelectListCBCommand {
+func (b *BaseBehavior) CreateSelectListCBCommand(cb interface{},
+	entityType string, tx *sql.Tx) *SelectListCBCommand {
 	//assert 省略
 	cmd := new(SelectListCBCommand)
 	var behavior BehaviorCommand = cmd
@@ -260,7 +310,8 @@ func (b *BaseBehavior) CreateSelectListCBCommand(cb interface{}, entityType stri
 
 func (b *BaseBehavior) XsetupSelectCommand(cmd *BaseBehaviorCommand) {
 	cmd.TableDbName = (*b.Behavior).GetBaseBehavior().AsTableDbName()
-	(*b.Behavior).GetBaseBehavior().GetBehaviorCommandInvoker().InjectComponentProperty(cmd)
+	(*b.Behavior).GetBaseBehavior().GetBehaviorCommandInvoker().
+		InjectComponentProperty(cmd)
 }
 
 type InvokerAssistant interface {
@@ -275,45 +326,49 @@ func (b *BaseBehavior) CreateBehaviorCommandInvoker() {
 	b.BehaviorCommandInvoker = new(BehaviorCommandInvoker)
 }
 
-func (b *BaseBehavior) xsetupEntityCommand(cmd *BaseEntityCommand, entity *Entity, tableDbName string) {
+func (b *BaseBehavior) xsetupEntityCommand(cmd *BaseEntityCommand, entity *Entity,
+	tableDbName string) {
 	cmd.entity = entity
 	cmd.TableDbName = tableDbName
-	(*b.Behavior).GetBaseBehavior().GetBehaviorCommandInvoker().InjectComponentProperty(&cmd.BaseBehaviorCommand)
+	(*b.Behavior).GetBaseBehavior().GetBehaviorCommandInvoker().
+		InjectComponentProperty(&cmd.BaseBehaviorCommand)
 }
 
 type StatementFactory interface {
-	PrepareStatement(orgSql string, tx *sql.Tx, dbc *DBCurrent) (*sql.Stmt, error)
+	PrepareStatement(orgSql string, tx *sql.Tx, dbc *DBCurrent) *sql.Stmt
 	ModifyBindVariables(bindVariables *List, bindVariableTypes *StringList) *List
 }
 
 type TnStatementFactoryImpl struct {
 }
 
-func (t *TnStatementFactoryImpl) ModifyBindVariables(bindVariables *List, bindVariableTypes *StringList) *List {
-	if bindVariables==nil{
+func (t *TnStatementFactoryImpl) ModifyBindVariables(bindVariables *List,
+	bindVariableTypes *StringList) *List {
+	if bindVariables == nil {
 		return bindVariables
 	}
 	//convert df.NullString to sql.NullString
-	for i,item:=range bindVariables.data{
-		stype:=GetType(item)
-		if stype=="df.NullString" {
-			var dns NullString=item.(NullString)
-			ns:=new(sql.NullString)
-			ns.Valid=dns.Valid
-			ns.String=dns.String
-			bindVariables.data[i]=ns
-		}
-	}
+	//	for i, item := range bindVariables.data {
+	//		stype := GetType(item)
+	//		if stype == "df.NullString" {
+	//			var dns NullString = item.(NullString)
+	//			ns := new(sql.NullString)
+	//			ns.Valid = dns.Valid
+	//			ns.String = dns.String
+	//			bindVariables.data[i] = ns
+	//		}
+	//	}
 	return bindVariables
 }
-func (t *TnStatementFactoryImpl) PrepareStatement(orgSql string, tx *sql.Tx, dbc *DBCurrent) (*sql.Stmt, error) {
+func (t *TnStatementFactoryImpl) PrepareStatement(orgSql string, tx *sql.Tx,
+	dbc *DBCurrent) *sql.Stmt {
 	sql := t.modifySql(orgSql, dbc)
 	//fmt.Printf("sql %s tx %v %T\n", sql, tx, tx)
 	stmt, errs := tx.Prepare(sql)
 	if errs != nil {
-		return nil, errors.New(errs.Error() + ":" + sql)
+		panic(errs.Error() + ":" + sql)
 	}
-	return stmt, nil
+	return stmt
 }
 func (t *TnStatementFactoryImpl) modifySql(sql string, dbc *DBCurrent) string {
 	if (*dbc.DBWay).GetPlaceholderType() == "$1" {
@@ -325,7 +380,6 @@ func (t *TnStatementFactoryImpl) modifySql(sql string, dbc *DBCurrent) string {
 type TnBeanMetaDataFactory struct {
 }
 
-
 var Gopath string
 
 type BhvUtil struct {
@@ -334,7 +388,8 @@ type BhvUtil struct {
 
 var BhvUtil_I *BhvUtil
 
-func (b *BhvUtil) GetEntityAndInterfaceArray(name string) (interface{}, []interface{}) {
+func (b *BhvUtil) GetEntityAndInterfaceArray(name string) (
+	interface{}, []interface{}) {
 	entityp := b.entityMap[name]()
 	var entity Entity = *entityp
 	return entity, entity.GetAsInterfaceArray()
@@ -347,7 +402,9 @@ func (b *BhvUtil) AddEntity(ename string, ef func() *Entity) {
 	log.InternalDebug("AddEntity :" + ename)
 	b.entityMap[ename] = ef
 }
-func (b *BhvUtil) GetListResultBean(rows *sql.Rows, entity string) (*ListResultBean, error) {
+func (b *BhvUtil) GetListResultBean(rows *sql.Rows, entity string,
+	sqlClause interface{}) *ListResultBean {
+		
 	list := new(ListResultBean)
 	list.New()
 	for rows.Next() {
@@ -355,7 +412,7 @@ func (b *BhvUtil) GetListResultBean(rows *sql.Rows, entity string) (*ListResultB
 		table, array := b.GetEntityAndInterfaceArray(entity)
 		err := rows.Scan(array...)
 		if err != nil {
-			return nil, err
+			panic(err.Error())
 		}
 		list.List.Add(table)
 	}
@@ -368,5 +425,5 @@ func (b *BhvUtil) GetListResultBean(rows *sql.Rows, entity string) (*ListResultB
 		list.TableDbName = (*tmap).GetTableDbName()
 	}
 
-	return list, nil
+	return list
 }

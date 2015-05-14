@@ -18,7 +18,7 @@ package df
 import (
 	"database/sql/driver"
 	"errors"
-	"fmt"
+//	"fmt"
 	"strconv"
 	"strings"
 	"time"
@@ -87,41 +87,41 @@ func (nn Numeric) Value() (driver.Value, error) {
 	return strconv.Itoa(int(ivalue)) + "." + strconv.Itoa(int(dvalue)), nil
 }
 
-type NullString struct {
-	String string //total value 10.50 -> 1050
-	Valid  bool   // Valid is true if Value not null
-}
-
-func (nn *NullString) Scan(value interface{}) error {
-	if value == nil {
-		nn.Valid = false
-		return nil
-	}
-	nn.Valid = true
-	switch value.(type) {
-	case string:
-		var svalue = value.(string)
-		nn.String = svalue
-		return nil
-	case time.Time:
-		var tvalue time.Time = value.(time.Time)
-		nn.String = tvalue.Format(DISP_SQL_DEFAULT_DATE_FORMAT)
-		return nil
-	case []uint8:
-		nn.String = (string)(value.([]uint8))
-		return nil
-	}
-	panic("this type not supported :" + fmt.Sprintf("%T", value))
-	return nil
-}
-func (nn *NullString) Value() (driver.Value, error) {
-	if !nn.Valid {
-		return nil, nil
-	}
-	var sv []uint8
-	sv = ([]uint8)(nn.String)
-	return sv, nil
-}
+//type NullString struct {
+//	String string //total value 10.50 -> 1050
+//	Valid  bool   // Valid is true if Value not null
+//}
+//
+//func (nn *NullString) Scan(value interface{}) error {
+//	if value == nil {
+//		nn.Valid = false
+//		return nil
+//	}
+//	nn.Valid = true
+//	switch value.(type) {
+//	case string:
+//		var svalue = value.(string)
+//		nn.String = svalue
+//		return nil
+//	case time.Time:
+//		var tvalue time.Time = value.(time.Time)
+//		nn.String = tvalue.Format(DISP_SQL_DEFAULT_DATE_FORMAT)
+//		return nil
+//	case []uint8:
+//		nn.String = (string)(value.([]uint8))
+//		return nil
+//	}
+//	panic("this type not supported :" + fmt.Sprintf("%T", value))
+//	return nil
+//}
+//func (nn *NullString) Value() (driver.Value, error) {
+//	if !nn.Valid {
+//		return nil, nil
+//	}
+//	var sv []uint8
+//	sv = ([]uint8)(nn.String)
+//	return sv, nil
+//}
 
 type NullNumeric struct {
 	IntValue int64 //total value 10.50 -> 1050

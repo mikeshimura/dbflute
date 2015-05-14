@@ -78,7 +78,7 @@ func TestSqlAnalyzer(t *testing.T) {
 	sa.Setup(`select/*$pmb.selectHint*/ dfloc.id as id, dfloc.login_id as login_id, dfloc.name as name, dfloc.version_no as version_no
   from li_tbl dfloc
  where dfloc.id = /*pmb.conditionQuery.id.fixed.query.equal*/null`, false)
-	nd := sa.Analyze()
+	nd,_ := sa.Analyze()
 	//fmt.Printf("Node %v %T\n",nd,nd)
 	var sanode Node = *nd
 	//fmt.Println("len",strconv.Itoa(sanode.GetChildSize()))

@@ -18,19 +18,20 @@ package df
 import (
 	//"container/list"
 	"database/sql"
+//	"errors"
 	"fmt"
 	"github.com/mikeshimura/dbflute/log"
 	"reflect"
 	"strings"
 	"time"
-	"errors"
 )
 
 type BehaviorCommandInvoker struct {
 	InvokerAssistant *InvokerAssistant
 }
 
-func (b *BehaviorCommandInvoker) createOutsideSqlBasicExecutor(tableDbName string, bhv *Behavior) *OutsideSqlBasicExecutor {
+func (b *BehaviorCommandInvoker) createOutsideSqlBasicExecutor(
+	tableDbName string, bhv *Behavior) *OutsideSqlBasicExecutor {
 	//	        final OutsideSqlExecutorFactory factory = _invokerAssistant.assistOutsideSqlExecutorFactory();
 	factory := (*b.InvokerAssistant).AssistOutsideSqlExecutorFactory()
 	dbdef := (*b.InvokerAssistant).GetDBCurrent().DBDef
@@ -46,7 +47,8 @@ func (b *BehaviorCommandInvoker) InjectComponentProperty(cmd *BaseBehaviorComman
 	cmd.DBMetaProvider = (*b.InvokerAssistant).GetDBMetaProvider()
 
 }
-func (b *BehaviorCommandInvoker) FindSqlExecution(cmd *BehaviorCommand) (*SqlExecution,error) {
+func (b *BehaviorCommandInvoker) FindSqlExecution(cmd *BehaviorCommand) (
+	*SqlExecution) {
 	//        final boolean logEnabled = isLogEnabled();
 	//        SqlExecution execution = null;
 	//        try {
@@ -62,16 +64,14 @@ func (b *BehaviorCommandInvoker) FindSqlExecution(cmd *BehaviorCommand) (*SqlExe
 	//                    beforeCmd = systemTime();
 	//                }
 	//                SqlExecutionCreator creator = behaviorCommand.createSqlExecutionCreator();
-//	creator,err1 := (*cmd).CreateSqlExecutionCreator()
-//		if err1!=nil{
-//		return nil,err1
-//	}
-		
-	execution,err := b.GetOrCreateSqlExecution(key, cmd, (*cmd).GetConditionBean(), (*cmd).GetEntityBean())
-	if err!=nil{
-		return nil,err
-	}
-	return execution,err
+	//	creator,err1 := (*cmd).CreateSqlExecutionCreator()
+	//		if err1!=nil{
+	//		return nil,err1
+	//	}
+
+	execution:= b.GetOrCreateSqlExecution(key, cmd, (*cmd).GetConditionBean(),
+		(*cmd).GetEntityBean())
+	return execution
 	//                execution = getOrCreateSqlExecution(key, creator);
 	//                if (logEnabled) {
 	//                    final long afterCmd = systemTime();
@@ -91,7 +91,9 @@ func (b *BehaviorCommandInvoker) FindSqlExecution(cmd *BehaviorCommand) (*SqlExe
 	//return nil
 
 }
-func (b *BehaviorCommandInvoker) GetOrCreateSqlExecution(key string, creator *BehaviorCommand, conditionBean interface{}, entityBean interface{}) (*SqlExecution,error) {
+func (b *BehaviorCommandInvoker) GetOrCreateSqlExecution(key string,
+	creator *BehaviorCommand, conditionBean interface{},
+	entityBean interface{}) *SqlExecution {
 	//	        SqlExecution execution = null;
 	//        synchronized (_executionCacheLock) {
 	//            execution = getSqlExecution(key);
@@ -109,13 +111,11 @@ func (b *BehaviorCommandInvoker) GetOrCreateSqlExecution(key string, creator *Be
 	//        }
 	//        toBeDisposable(); // for HotDeploy
 	//        return execution;
-	execution,err := (*creator).CreateSqlExecution(conditionBean, entityBean)
-	if err!=nil{
-		return nil,err
-	}
-	return execution,nil
+	execution:= (*creator).CreateSqlExecution(conditionBean, entityBean)
+	return execution
 }
-func (b *BehaviorCommandInvoker) DispatchInvoking(cmd *BehaviorCommand) (interface{}, error) {
+func (b *BehaviorCommandInvoker) DispatchInvoking(cmd *BehaviorCommand) (
+	interface{}) {
 	//        if (behaviorCommand.isInitializeOnly()) {
 	//            initializeSqlExecution(behaviorCommand);
 	//            return null; // The end! (Initialize Only)
@@ -123,10 +123,7 @@ func (b *BehaviorCommandInvoker) DispatchInvoking(cmd *BehaviorCommand) (interfa
 	//        behaviorCommand.beforeGettingSqlExecution();
 	(*cmd).BeforeGettingSqlExecution()
 	//        SqlExecution execution = findSqlExecution(behaviorCommand);
-	execution,err := b.FindSqlExecution(cmd)
-	if err!=nil{
-		return nil,err
-	}
+	execution := b.FindSqlExecution(cmd)
 	// - - - - - - - - - - -
 	// Execute SQL Execution
 	// - - - - - - - - - - -
@@ -145,10 +142,7 @@ func (b *BehaviorCommandInvoker) DispatchInvoking(cmd *BehaviorCommand) (interfa
 	log.InternalDebug(fmt.Sprintf("command 102 %v%T\n", tx, tx))
 	log.InternalDebug(fmt.Sprintf("command 102 %v%T\n", execution, execution))
 	before := time.Now()
-	ret, err := (*execution).Execute(args, tx, (*cmd).GetBhavior())
-	if err!=nil{
-		return nil,err
-	}
+	ret := (*execution).Execute(args, tx, (*cmd).GetBhavior())
 	after := time.Now()
 	//            final Object[] args = behaviorCommand.getSqlExecutionArgument();
 	//args:=cmd.GetSqlExecutionArgument()
@@ -191,9 +185,10 @@ func (b *BehaviorCommandInvoker) DispatchInvoking(cmd *BehaviorCommand) (interfa
 	//        final RESULT result = (RESULT) ret;
 	//        return result;
 
-	return ret, err
+	return ret
 }
-func (b *BehaviorCommandInvoker) logResult(cmd *BehaviorCommand, elapse time.Duration, entityType string, ret interface{}) {
+func (b *BehaviorCommandInvoker) logResult(cmd *BehaviorCommand,
+	elapse time.Duration, entityType string, ret interface{}) {
 	//	        final BehaviorResultBuilder behaviorResultBuilder = createBehaviorResultBuilder();
 	//        final String resultExp = behaviorResultBuilder.buildResultExp(retType, ret, before, after);
 	//        log(resultExp);
@@ -202,7 +197,8 @@ func (b *BehaviorCommandInvoker) logResult(cmd *BehaviorCommand, elapse time.Dur
 	resultExp := brb.buildResultExp(elapse, entityType, ret)
 	DFLog(resultExp)
 }
-func (b *BehaviorCommandInvoker) Invoke(cmd *BehaviorCommand) (interface{}, error) {
+func (b *BehaviorCommandInvoker) Invoke(cmd *BehaviorCommand) (
+	interface{}) {
 	//        RuntimeException cause = null;
 	//        RESULT result = null;
 	//        try {
@@ -215,25 +211,24 @@ func (b *BehaviorCommandInvoker) Invoke(cmd *BehaviorCommand) (interface{}, erro
 	(*cmd).SetResourceContext(rc)
 	return b.DispatchInvoking(cmd)
 }
+
 type DeleteEntityCommand struct {
 	BaseEntityCommand
 	deleteOption *DeleteOption
 }
 
-func (s *DeleteEntityCommand) CreateSqlExecution(a interface{}, b interface{}) (*SqlExecution,error) {
+func (s *DeleteEntityCommand) CreateSqlExecution(a interface{}, b interface{}) *SqlExecution {
 	dcmd := new(TnDeleteEntityStaticCommand)
 	dcmd.StatementFactory = s.StatementFactory
 	dcmd.rc = s.rc
 	dcmd.propertyNames = s.CreatePropertyNames()
 	dcmd.targetDBMeta = (*s.entity).GetDBMeta()
-	dcmd.optimisticLockHandling=true
-	err:=dcmd.setupDeleteSql()
-	if err !=nil{
-		return nil,err
-	}
+	dcmd.optimisticLockHandling = true
+	dcmd.setupDeleteSql()
+
 	var se SqlExecution = dcmd
 	dcmd.sqlExecution = &se
-	return &se,nil
+	return &se
 }
 func (s *DeleteEntityCommand) GetCommandName() string {
 	return "delete"
@@ -241,6 +236,7 @@ func (s *DeleteEntityCommand) GetCommandName() string {
 func (s *DeleteEntityCommand) GetSqlExecutionArgument() []interface{} {
 	return []interface{}{s.entity, s.deleteOption}
 }
+
 type InsertEntityCommand struct {
 	BaseEntityCommand
 	insertOption *InsertOption
@@ -250,7 +246,7 @@ func (s *InsertEntityCommand) GetSqlExecutionArgument() []interface{} {
 	return []interface{}{s.entity, s.insertOption}
 }
 
-func (s *InsertEntityCommand) CreateSqlExecution(a interface{}, b interface{}) (*SqlExecution,error) {
+func (s *InsertEntityCommand) CreateSqlExecution(a interface{}, b interface{}) *SqlExecution {
 	dcmd := new(TnInsertEntityDynamicCommand)
 	dcmd.StatementFactory = s.StatementFactory
 	dcmd.rc = s.rc
@@ -258,7 +254,7 @@ func (s *InsertEntityCommand) CreateSqlExecution(a interface{}, b interface{}) (
 	dcmd.targetDBMeta = (*s.entity).GetDBMeta()
 	var se SqlExecution = dcmd
 	dcmd.sqlExecution = &se
-	return &se,nil
+	return &se
 }
 
 func (s *InsertEntityCommand) GetCommandName() string {
@@ -284,13 +280,10 @@ func (s *SelectNextValCommand) BuildSqlExecutionKey() string {
 	return s.TableDbName + ":" + s.GetCommandName() + "()"
 }
 
-func (s *SelectNextValCommand) CreateSqlExecution(a interface{}, b interface{}) (*SqlExecution,error) {
+func (s *SelectNextValCommand) CreateSqlExecution(a interface{}, b interface{}) *SqlExecution {
 	//        assertStatus("createSelectNextValExecution");
 	//        final DBMeta dbmeta = _dbmeta;
-	err:=s.assertTableHasSequence()
-	if err!=nil{
-		return nil,err
-	}
+	s.assertTableHasSequence()
 	sql := s.getSequenceNextValSql() // filtered later
 	//fmt.Println("SQL:" + sql)
 	//        assertSequenceReturnsNotNull(sql, dbmeta);
@@ -303,16 +296,14 @@ func (s *SelectNextValCommand) CreateSqlExecution(a interface{}, b interface{}) 
 	exe := new(SelectNextValExecution)
 	exe.rc = s.rc
 	exe.StatementFactory = s.StatementFactory
-	exe.rootNode,err = exe.AnalyzeTwoWaySql(sql)
-	if err!=nil{
-		return nil,err
-	}
+	exe.rootNode = exe.AnalyzeTwoWaySql(sql)
+
 	exe.ResultType = "D_Int64"
 
 	//fmt.Printf("RootNode %v\n", exe.rootNode)
 	var se SqlExecution = exe
 	exe.sqlExecution = &se
-	return &se,nil
+	return &se
 }
 func (s *SelectNextValCommand) getSequenceNextValSql() string {
 	return (*s.dbmeta).GetSequenceNextValSql()
@@ -320,11 +311,12 @@ func (s *SelectNextValCommand) getSequenceNextValSql() string {
 func (s *SelectNextValCommand) GetSqlExecutionArgument() []interface{} {
 	return []interface{}{}
 }
-func (s *SelectNextValCommand) assertTableHasSequence() error{
+func (s *SelectNextValCommand) assertTableHasSequence() {
 	if !(*s.dbmeta).HasSequence() {
-		return errors.New("If it uses sequence, the table should be related to a sequence: table=" + (*s.dbmeta).GetTableDbName())
+		panic("If it uses sequence, the table should be related to a sequence: table=" +
+				(*s.dbmeta).GetTableDbName())
 	}
-	return nil
+	return
 }
 
 type SelectListCBCommand struct {
@@ -338,22 +330,24 @@ func (b *SelectListCBCommand) GetEntityType() string {
 func (b *SelectListCBCommand) GetEntityBean() interface{} {
 	return b.EntityType
 }
-func (s *SelectListCBCommand) CreateSqlExecution(cb interface{}, entity interface{}) (*SqlExecution,error) {
+func (s *SelectListCBCommand) CreateSqlExecution(cb interface{}, entity interface{}) *SqlExecution {
 	//                TnBeanMetaData bmd = createBeanMetaData();
 	//                TnResultSetHandler handler = createBeanListResultSetHandler(bmd);
 	//                return createSelectCBExecution(_conditionBean.getClass(), handler);
 
 	//    }
-	return s.CreateSelectCBExecution(cb, entity.(string)),nil
+	return s.CreateSelectCBExecution(cb, entity.(string))
 }
-func (s *SelectListCBCommand) CreateSelectCBExecution(cb interface{}, entity string) *SqlExecution {
+func (s *SelectListCBCommand) CreateSelectCBExecution(
+	cb interface{}, entity string) *SqlExecution {
 	//    protected SelectCBExecution createSelectCBExecution(Class<? extends ConditionBean> cbType, TnResultSetHandler handler) {
 	//        return newSelectCBExecution(createBeanArgNameTypeMap(cbType), handler);
 	amap := s.createBeanArgNameTypeMap(cb)
-	return s.NewSelectCBExecution(amap, entity)
+	return s.NewSelectCBExecution(amap, entity,cb)
 
 }
-func (s *SelectListCBCommand) NewSelectCBExecution(amap map[string]string, entity interface{}) *SqlExecution {
+func (s *SelectListCBCommand) NewSelectCBExecution(
+	amap map[string]string, entity interface{},cb interface{}) *SqlExecution {
 	se := new(SelectCBExecution)
 	var sqlExecution SqlExecution = se
 	se.sqlExecution = &sqlExecution
@@ -401,12 +395,16 @@ func (b *AbstractSelectCBCommand) GetSqlExecutionArgument() []interface{} {
 	i[0] = b.ConditionBean
 	return i
 }
-func (b *AbstractSelectCBCommand) BuildSqlExecutionKeySuper(cmd *BehaviorCommand) string {
+func (b *AbstractSelectCBCommand) BuildSqlExecutionKeySuper(
+	cmd *BehaviorCommand) string {
 	//fmt.Printf("ConditionBean 1 %v%T", b.ConditionBean, b.ConditionBean)
-	v := reflect.ValueOf(b.ConditionBean).Elem().FieldByName("BaseConditionBean").Interface()
-	cbname := reflect.ValueOf(v).MethodByName("GetName").Call([]reflect.Value{})
+	v := reflect.ValueOf(b.ConditionBean).Elem().
+		FieldByName("BaseConditionBean").Interface()
+	cbname := reflect.ValueOf(v).MethodByName("GetName").
+		Call([]reflect.Value{})
 	arg := cbname[0]
-	return b.TableDbName + ":" + (*cmd).GetCommandName() + "(" + arg.String() + ")"
+	return b.TableDbName + ":" + (*cmd).GetCommandName() + "(" +
+		arg.String() + ")"
 }
 
 type BehaviorCommand interface {
@@ -421,7 +419,7 @@ type BehaviorCommand interface {
 	GetEntityType() string
 	GetResourceContext() *ResourceContext
 	SetResourceContext(rc *ResourceContext)
-	CreateSqlExecution(cb interface{}, entity interface{}) (*SqlExecution, error)
+	CreateSqlExecution(cb interface{}, entity interface{}) *SqlExecution
 }
 type BaseBehaviorCommand struct {
 	TableDbName            string
@@ -432,7 +430,7 @@ type BaseBehaviorCommand struct {
 	tx                     *sql.Tx
 	behaviorCommandInvoker *BehaviorCommandInvoker
 	rc                     *ResourceContext
-	BehaviorCommand             *BehaviorCommand
+	BehaviorCommand        *BehaviorCommand
 }
 
 func (b *BaseBehaviorCommand) SetResourceContext(rc *ResourceContext) {
@@ -456,7 +454,8 @@ func (b *BaseBehaviorCommand) GetBhavior() *Behavior {
 func (b *BaseBehaviorCommand) GetTx() *sql.Tx {
 	return b.tx
 }
-func (b *BaseBehaviorCommand) createBeanArgNameTypeMap(pmbTypeObj interface{}) map[string]string {
+func (b *BaseBehaviorCommand) createBeanArgNameTypeMap(
+	pmbTypeObj interface{}) map[string]string {
 	amap := make(map[string]string)
 	if pmbTypeObj == nil {
 		return amap
@@ -485,24 +484,27 @@ func (u *UpdateEntityCommand) GetCommandName() string {
 	return "update"
 }
 
-func (u *UpdateEntityCommand) CreateSqlExecution(cb interface{}, entity interface{}) (*SqlExecution,error) {
+func (u *UpdateEntityCommand) CreateSqlExecution(
+	cb interface{}, entity interface{}) *SqlExecution{
 	//        return new SqlExecutionCreator() {
 	//            public SqlExecution createSqlExecution() {
 	//                final TnBeanMetaData bmd = createBeanMetaData();
 	//                return createUpdateEntitySqlExecution(bmd);
 	entityx := entity.(*Entity)
 	dbmeta := (*entityx).GetDBMeta()
-	return u.CreateUpdateEntitySqlExecution(dbmeta),nil
+	return u.CreateUpdateEntitySqlExecution(dbmeta)
 }
 
-func (u *UpdateEntityCommand) CreateUpdateEntitySqlExecution(dbmeta *DBMeta) *SqlExecution {
+func (u *UpdateEntityCommand) CreateUpdateEntitySqlExecution(
+	dbmeta *DBMeta) *SqlExecution {
 	propertyNames := u.getPersistentPropertyNames(dbmeta)
 	propertyNames = propertyNames
 	tnCommand := u.createUpdateEntityDynamicCommand(propertyNames, dbmeta)
 	var sqle SqlExecution = tnCommand
 	return &sqle
 }
-func (u *UpdateEntityCommand) createUpdateEntityDynamicCommand(propertyNames *StringList, dbmeta *DBMeta) *TnUpdateEntityDynamicCommand {
+func (u *UpdateEntityCommand) createUpdateEntityDynamicCommand(
+	propertyNames *StringList, dbmeta *DBMeta) *TnUpdateEntityDynamicCommand {
 	//   final TnUpdateEntityDynamicCommand cmd = newUpdateEntityDynamicCommand();
 	cmd := new(TnUpdateEntityDynamicCommand)
 	var sqlExecution SqlExecution = cmd
@@ -526,6 +528,7 @@ type BaseEntityCommand struct {
 	BaseBehaviorCommand
 	entity *Entity
 }
+
 func (s *BaseEntityCommand) CreatePropertyNames() *StringList {
 	var propertyList = new(StringList)
 	for _, ci := range (*(*s.entity).GetDBMeta()).GetColumnInfoList().data {
@@ -541,14 +544,16 @@ func (b *BaseEntityCommand) xsetupEntityCommand(entity *Entity) {
 	b.entity = entity
 }
 
-func (b *BaseEntityCommand) getPersistentPropertyNames(dbmeta *DBMeta) *StringList {
+func (b *BaseEntityCommand) getPersistentPropertyNames(
+	dbmeta *DBMeta) *StringList {
 	columnInfoList := (*dbmeta).GetColumnInfoList()
 	propertyNameList := new(StringList)
 	for _, columnInfo := range columnInfoList.data {
 		var ci *ColumnInfo = columnInfo.(*ColumnInfo)
 		propertyNameList.Add(ci.PropertyName)
 	}
-	log.InternalDebug(fmt.Sprintf("propertyNameList %v\n", propertyNameList.data))
+	log.InternalDebug(fmt.Sprintf("propertyNameList %v\n",
+			 propertyNameList.data))
 	return propertyNameList
 }
 func (b *BaseEntityCommand) BeforeGettingSqlExecution() {
@@ -558,7 +563,8 @@ func (b *BaseEntityCommand) BuildSqlExecutionKey() string {
 	//	    assertStatus("buildSqlExecutionKey");
 	entityName := (*(*b.entity).GetDBMeta()).GetTablePropertyName()
 
-	return b.TableDbName + ":" + (*b.BehaviorCommand).GetCommandName() + "(" + entityName + ")"
+	return b.TableDbName + ":" + (*b.BehaviorCommand).GetCommandName() +
+	 "(" + entityName + ")"
 
 }
 
@@ -609,22 +615,22 @@ func (a *AbstractOutsideSqlSelectCommand) generateSpecifiedOutsideSqlUniqueKey()
 	pmb := a.pmb
 	option := a.OutsideSqlOption
 	resultType := (*a.BehaviorCommand).GetEntityType()
-	return (*a.rc).GetOutsideSqlContext().generateSpecifiedOutsideSqlUniqueKey(methodName, path, pmb, option, resultType)
+	return (*a.rc).GetOutsideSqlContext().generateSpecifiedOutsideSqlUniqueKey(
+		methodName, path, pmb, option, resultType)
 	//        return OutsideSqlContext.generateSpecifiedOutsideSqlUniqueKey(methodName, path, pmb, option, resultType);
 }
-func (a *AbstractOutsideSqlSelectCommand) CreateSqlExecution(outsideSqlContext interface{}, entity interface{}) (*SqlExecution,error) {
+func (a *AbstractOutsideSqlSelectCommand) CreateSqlExecution(
+	outsideSqlContext interface{}, entity interface{}) *SqlExecution {
 	//	                final OutsideSqlContext outsideSqlContext = OutsideSqlContext.getOutsideSqlContextOnThread();
 	//                return createOutsideSqlSelectExecution(outsideSqlContext);
 	return a.createOutsideSqlSelectExecution(outsideSqlContext.(*OutsideSqlContext))
 }
-func (a *AbstractOutsideSqlSelectCommand) createOutsideSqlSelectExecution(outsideSqlContext *OutsideSqlContext) (*SqlExecution,error) {
+func (a *AbstractOutsideSqlSelectCommand) createOutsideSqlSelectExecution(
+	outsideSqlContext *OutsideSqlContext) *SqlExecution {
 	pmb := outsideSqlContext.Pmb
 	suffix := a.buildDbmsSuffix()
 	a.outsideSqlContext.OutsideSqlPath = a.OutsideSqlPath
-	sql,err1 := outsideSqlContext.readFilteredOutsideSql(suffix)
-	if err1!=nil{
-		return nil,err1
-	}
+	sql := outsideSqlContext.readFilteredOutsideSql(suffix)
 
 	//
 	//        // - - - - - - - - - - - - -
@@ -636,18 +642,16 @@ func (a *AbstractOutsideSqlSelectCommand) createOutsideSqlSelectExecution(outsid
 	//        // Create SqlExecution.
 	//        // - - - - - - - - - - -
 	//        final OutsideSqlSelectExecution execution = createOutsideSqlSelectExecution(pmb, sql, handler);
-	execution,err := a.createOutsideSqlSelectExecutionSub(pmb, sql)
-	if err!=nil{
-		return nil,err
-	}
+	execution:= a.createOutsideSqlSelectExecutionSub(pmb, sql)
 	//        execution.setRemoveBlockComment(isRemoveBlockComment(outsideSqlContext));
 	//        execution.setRemoveLineComment(isRemoveLineComment(outsideSqlContext));
 	//        execution.setFormatSql(outsideSqlContext.isFormatSql());
 	//        execution.setOutsideSqlFilter(_outsideSqlFilter);
 	var exei SqlExecution = execution
-	return &exei,nil
+	return &exei
 }
-func (a *AbstractOutsideSqlSelectCommand) createOutsideSqlSelectExecutionSub(pmb interface{}, sql string) (*OutsideSqlSelectExecution,error) {
+func (a *AbstractOutsideSqlSelectCommand) createOutsideSqlSelectExecutionSub(
+	pmb interface{}, sql string) *OutsideSqlSelectExecution {
 	//        final Map<String, Class<?>> argNameTypeMap = createBeanArgNameTypeMap(pmbTypeObj);
 	//        return newOutsideSqlSelectExecution(argNameTypeMap, sql, handler);
 	argNameTypeMap := a.createBeanArgNameTypeMap(pmb)
@@ -664,15 +668,12 @@ func (a *AbstractOutsideSqlSelectCommand) createOutsideSqlSelectExecutionSub(pmb
 		ex.ArgTypes = []string{pmbname}
 	}
 	analyzer := ex.CreateSqlAnalyzer(sql)
-	rn,err := analyzer.Analyze()
-	if err!=nil{
-		return nil,err
-	}
+	rn := analyzer.Analyze()
 	ex.rootNode = rn
 	if ex.rootNode == nil {
-		return nil,errors.New("rootNode NIL")
+		panic("rootNode NIL")
 	}
-	return ex,nil
+	return ex
 }
 
 //func (a *AbstractOutsideSqlSelectCommand)createBeanArgNameTypeMap(pmbTypeObj interface{})map[string]string{
@@ -680,7 +681,6 @@ func (a *AbstractOutsideSqlSelectCommand) createOutsideSqlSelectExecutionSub(pmb
 //	amap["pmb"]=GetType(pmbTypeObj)
 //	return amap
 //}
-
 
 type AbstractOutsideSqlCommand struct {
 	BaseBehaviorCommand
@@ -691,6 +691,7 @@ type AbstractOutsideSqlCommand struct {
 	pmb                      interface{}
 	outsideSqlContext        *OutsideSqlContext
 }
+
 func (a *AbstractOutsideSqlCommand) buildDbmsSuffix() string {
 	//	        assertOutsideSqlBasic("buildDbmsSuffix");
 	//        final String productName = _currentDBDef.code();
@@ -701,9 +702,11 @@ func (a *AbstractOutsideSqlCommand) buildDbmsSuffix() string {
 func (a *AbstractOutsideSqlCommand) GetConditionBean() interface{} {
 	return a.outsideSqlContext
 }
-type OutsideSqlExecuteCommand struct{
+
+type OutsideSqlExecuteCommand struct {
 	AbstractOutsideSqlCommand
 }
+
 func (s *OutsideSqlExecuteCommand) GetEntityType() string {
 	return "D_Int64"
 }
@@ -715,37 +718,34 @@ func (a *OutsideSqlExecuteCommand) GetSqlExecutionArgument() []interface{} {
 func (o *OutsideSqlExecuteCommand) GetCommandName() string {
 	return "execute"
 }
-func (a *OutsideSqlExecuteCommand) CreateSqlExecution(outsideSqlContext interface{}, entity interface{}) (*SqlExecution,error) {
+func (a *OutsideSqlExecuteCommand) CreateSqlExecution(
+	outsideSqlContext interface{}, entity interface{}) *SqlExecution {
 	//	                final OutsideSqlContext outsideSqlContext = OutsideSqlContext.getOutsideSqlContextOnThread();
 	//                return createOutsideSqlSelectExecution(outsideSqlContext);
 	return a.createOutsideSqlExecuteExecution(outsideSqlContext.(*OutsideSqlContext))
 }
-func (a *OutsideSqlExecuteCommand) createOutsideSqlExecuteExecution(outsideSqlContext *OutsideSqlContext) (*SqlExecution,error) {
+func (a *OutsideSqlExecuteCommand) createOutsideSqlExecuteExecution(
+	outsideSqlContext *OutsideSqlContext) *SqlExecution{
 	pmb := outsideSqlContext.Pmb
 	suffix := a.buildDbmsSuffix()
 	a.outsideSqlContext.OutsideSqlPath = a.OutsideSqlPath
-	sql,err1 := outsideSqlContext.readFilteredOutsideSql(suffix)
-	if err1!=nil{
-		return nil,err1
-	}
-	execution,err := a.createOutsideSqlExecuteExecutionSub(pmb, sql)
-		if err!=nil{
-		return nil,err
-	}
+	sql := outsideSqlContext.readFilteredOutsideSql(suffix)
+	execution := a.createOutsideSqlExecuteExecutionSub(pmb, sql)
 	//	        final Object pmb = outsideSqlContext.getParameterBean();
-//        final String suffix = buildDbmsSuffix();
-//        final String sql = outsideSqlContext.readFilteredOutsideSql(_sqlFileEncoding, suffix);
-//
-//        final OutsideSqlExecuteExecution execution = createOutsideSqlExecuteExecution(pmb, sql);
-//        execution.setOutsideSqlFilter(_outsideSqlFilter);
-//        execution.setRemoveBlockComment(isRemoveBlockComment(outsideSqlContext));
-//        execution.setRemoveLineComment(isRemoveLineComment(outsideSqlContext));
-//        execution.setFormatSql(outsideSqlContext.isFormatSql());
-//        return execution;
+	//        final String suffix = buildDbmsSuffix();
+	//        final String sql = outsideSqlContext.readFilteredOutsideSql(_sqlFileEncoding, suffix);
+	//
+	//        final OutsideSqlExecuteExecution execution = createOutsideSqlExecuteExecution(pmb, sql);
+	//        execution.setOutsideSqlFilter(_outsideSqlFilter);
+	//        execution.setRemoveBlockComment(isRemoveBlockComment(outsideSqlContext));
+	//        execution.setRemoveLineComment(isRemoveLineComment(outsideSqlContext));
+	//        execution.setFormatSql(outsideSqlContext.isFormatSql());
+	//        return execution;
 	var exei SqlExecution = execution
-	return &exei,nil
+	return &exei
 }
-func (a *OutsideSqlExecuteCommand) createOutsideSqlExecuteExecutionSub(pmb interface{}, sql string)(*OutsideSqlExecuteExecution,error){
+func (a *OutsideSqlExecuteCommand) createOutsideSqlExecuteExecutionSub(
+	pmb interface{}, sql string) *OutsideSqlExecuteExecution {
 	argNameTypeMap := a.createBeanArgNameTypeMap(pmb)
 	ex := new(OutsideSqlExecuteExecution)
 	var sqlExecution SqlExecution = ex
@@ -758,17 +758,12 @@ func (a *OutsideSqlExecuteCommand) createOutsideSqlExecuteExecutionSub(pmb inter
 		ex.ArgTypes = []string{pmbname}
 	}
 	analyzer := ex.CreateSqlAnalyzer(sql)
-	rn,err := analyzer.Analyze()
-	if err!=nil{
-		return nil,err
-	}
+	rn := analyzer.Analyze()
 	ex.rootNode = rn
 	if ex.rootNode == nil {
-		return nil,errors.New("rootNode NIL")
+		panic("rootNode NIL")
 	}
-	return ex,nil
-panic("OutsideSqlExecuteCommand) createOutsideSqlExecuteExecutionSub")
-	return nil,nil	
+	return ex
 }
 func (a *OutsideSqlExecuteCommand) BuildSqlExecutionKey() string {
 
@@ -781,7 +776,8 @@ func (a *OutsideSqlExecuteCommand) generateSpecifiedOutsideSqlUniqueKey() string
 	path := a.OutsideSqlPath
 	pmb := a.pmb
 	option := a.OutsideSqlOption
-	return (*a.rc).GetOutsideSqlContext().generateSpecifiedOutsideSqlUniqueKey(methodName, path, pmb, option, "")
+	return (*a.rc).GetOutsideSqlContext().generateSpecifiedOutsideSqlUniqueKey(
+		methodName, path, pmb, option, "")
 	//        return OutsideSqlContext.generateSpecifiedOutsideSqlUniqueKey(methodName, path, pmb, option, resultType);
 }
 func (a *OutsideSqlExecuteCommand) BeforeGettingSqlExecution() {
@@ -798,6 +794,7 @@ func (a *OutsideSqlExecuteCommand) BeforeGettingSqlExecution() {
 	cbc.Pmb = a.pmb
 	a.outsideSqlContext = cbc
 }
+
 // BehaviorCommandInvoker #InvokerAssistant @DispatchInvoking @FindSqlExecution @GetOrCreateSqlExecution @InjectComponentProperty @Invoke @createOutsideSqlBasicExecutor @logResult
 //
 // OutsideSqlSelectListCommand #entityType @GetCommandName @GetEntityType
@@ -813,4 +810,3 @@ func (a *OutsideSqlExecuteCommand) BeforeGettingSqlExecution() {
 // BaseEntityCommand #entity @BeforeGettingSqlExecution @BuildSqlExecutionKey @GetEntityBean @getPersistentPropertyNames @xsetupEntityCommand
 // BaseBehaviorCommand #BeanMetaDataFactory #Behavior #DBMetaProvider #StatementFactory #TableDbName #behaviorCommandInvoker #rc #topcommand #tx @GetBhavior @GetConditionBean @GetEntityBean @GetEntityType @GetResourceContext @GetTx @SetResourceContext @createBeanArgNameTypeMap
 //
-

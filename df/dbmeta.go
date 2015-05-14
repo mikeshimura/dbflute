@@ -17,10 +17,10 @@ package df
 
 import (
 	//	"container/list"
+	"github.com/mikeshimura/dbflute/log"
 	"reflect"
 	"strings"
-	"github.com/mikeshimura/dbflute/log"
-	//"fmt"
+//	"fmt"
 )
 
 var DBMetaProvider_I *DBMetaProvider
@@ -53,6 +53,8 @@ type DBMeta interface {
 	GetSequenceNextValSql() string
 	HasPrimaryKey() bool
 	HasCompoundPrimaryKey() bool
+	FindForeignInfo(foreignPropertyName string) *ForeignInfo
+	CreateForeignInfoMap()
 }
 
 type BaseDBMeta struct {
@@ -75,22 +77,58 @@ type BaseDBMeta struct {
 	CommonColumnInfoList             *List
 	CommonColumnInfoBeforeInsertList *List
 	CommonColumnInfoBeforeUpdateList *List
-	PrimaryKey                    bool
-	CompoundPrimaryKey            bool
-	Identity bool
+	PrimaryKey                       bool
+	CompoundPrimaryKey               bool
+	Identity                         bool
 	DBMeta                           *DBMeta
+	ForeignInfoMap                   map[string]*ForeignInfo
 }
-func (b *BaseDBMeta) HasPrimaryKey() bool{
+
+func (b *BaseDBMeta) FindForeignInfo(foreignPropertyName string) *ForeignInfo {
+	if b.ForeignInfoMap == nil {
+		(*b.DBMeta).CreateForeignInfoMap()
+	}
+	fi:=b.ForeignInfoMap[foreignPropertyName]
+	return fi
+}
+func (b *BaseDBMeta) Cfi(consName string, propName string, columns []*ColumnInfo,
+	relno int, oneToOne bool, bizOne bool, asOne bool, addFK bool,
+	fixedCond string, dynParamList *StringList, fixedInl bool,
+	revsName string) *ForeignInfo {
+
+	fi := new(ForeignInfo)
+	fi.ConstraintName = consName
+	fi.ForeignPropertyName = propName
+	fi.ColumnInfos = columns
+	fi.RelationNo = relno
+	fi.OneToOne = oneToOne
+	fi.BizOneToOne = bizOne
+	fi.ReferrerAsOne = asOne
+	fi.AdditionalFK = addFK
+	fi.FixedCondition = fixedCond
+	fi.DynamicParameterList = dynParamList
+	fi.FixedInline = fixedInl
+	fi.ReversePropertyName = revsName
+	return fi
+}
+
+func (b *BaseDBMeta) CreateForeignInfoMap() {
+	//Dummy Implementation
+	return
+}
+
+func (b *BaseDBMeta) HasPrimaryKey() bool {
 	return b.PrimaryKey
 }
-func (b *BaseDBMeta) HasCompoundPrimaryKey() bool{
+func (b *BaseDBMeta) HasCompoundPrimaryKey() bool {
 	return b.CompoundPrimaryKey
 }
 func (b *BaseDBMeta) GetSequenceNextValSql() string {
 	if !b.HasSequence() {
 		return ""
 	}
-	sql := (*(*b.DBMeta).GetDbCurrent().DBWay).BuildSequenceNextValSql((*b.DBMeta).GetSequenceName())
+	sql := (*(*b.DBMeta).GetDbCurrent().DBWay).
+		BuildSequenceNextValSql((*b.DBMeta).GetSequenceName())
 	return sql
 
 }
@@ -327,11 +365,13 @@ func (s *StringKeyMap) RemoveConnector(str string) string {
 }
 
 func IsSingleQuoted(str string) bool {
-	return len(str) > 1 && strings.Index(str, "'") == 0 && strings.LastIndex(str, "'") == len(str)-1
+	return len(str) > 1 && strings.Index(str, "'") == 0 &&
+		strings.LastIndex(str, "'") == len(str)-1
 }
 
 func IsDoubleQuoted(str string) bool {
-	return len(str) > 1 && strings.Index(str, "\"") == 0 && strings.LastIndex(str, "\"") == len(str)-1
+	return len(str) > 1 && strings.Index(str, "\"") == 0 &&
+		strings.LastIndex(str, "\"") == len(str)-1
 }
 
 func UnquoteSingle(str string) string {
@@ -375,8 +415,17 @@ type ColumnInfo struct {
 	CanBeColumnNullObject     bool
 }
 
-func CCI(DBMeta *DBMeta, ColumnDbName string, ColumnSqlName *ColumnSqlName, ColumnSynonym string, ColumnAlias string, ObjectNativeType string, PropertyName string, PropertyAccessType string, Primary bool, AutoIncrement bool, NotNull bool, ColumnDbType string, ColumnSize int64, DecimalDigits int64, DefaultValue string, IsCommonColumn bool, OptimistickLock string, CommentForDBMetaSetting string, ForeignPropertyName string, ReferrerPropertyName string, ClassificationMetaSetting string, CanBeColumnNullObject bool, GoType string) *ColumnInfo {
-	log.InternalDebug("ColumnSqlName :"+ColumnSqlName.ColumnSqlName)
+func CCI(DBMeta *DBMeta, ColumnDbName string, ColumnSqlName *ColumnSqlName,
+	ColumnSynonym string, ColumnAlias string, ObjectNativeType string,
+	PropertyName string, PropertyAccessType string, Primary bool,
+	AutoIncrement bool, NotNull bool, ColumnDbType string,
+	ColumnSize int64, DecimalDigits int64, DefaultValue string,
+	IsCommonColumn bool, OptimistickLock string,
+	CommentForDBMetaSetting string, ForeignPropertyName string,
+	ReferrerPropertyName string, ClassificationMetaSetting string,
+	CanBeColumnNullObject bool, GoType string) *ColumnInfo {
+
+	log.InternalDebug("ColumnSqlName :" + ColumnSqlName.ColumnSqlName)
 	ci := new(ColumnInfo)
 	ci.DbMeta = DBMeta
 	ci.ColumnDbName = ColumnDbName
@@ -436,4 +485,31 @@ type TnPropertyType struct {
 	primaryKey       bool
 	propetyName      string
 	GoType           string
+}
+
+type ForeignInfo struct {
+	ConstraintName       string
+	ForeignPropertyName  string
+	ColumnInfos          []*ColumnInfo
+	RelationNo           int
+	OneToOne             bool
+	BizOneToOne          bool
+	ReferrerAsOne        bool
+	AdditionalFK         bool
+	FixedCondition       string
+	DynamicParameterList *StringList
+	FixedInline          bool
+	ReversePropertyName  string
+}
+func (p *ForeignInfo)IsPureFK() bool{
+	return !p.AdditionalFK && !p.ReferrerAsOne
+}
+func (p *ForeignInfo)IsNotNullFKColumn() bool{
+	for i:=0;i<len(p.ColumnInfos);i+=2{
+		localColumnInfo:=p.ColumnInfos[i]
+		if localColumnInfo.NotNull==false{
+			return false
+		}
+	}
+	return true
 }

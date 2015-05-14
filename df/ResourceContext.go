@@ -20,7 +20,7 @@ import (
 	"io/ioutil"
 	//"reflect"
 	"strings"
-	"errors"
+//	"errors"
 )
 
 type DBMetaProvider struct {
@@ -40,6 +40,7 @@ func CreateDBMetaProvider() *DBMetaProvider {
 type ResourceContext struct {
 	ConditionBeanContext *ConditionBeanContext
 	OutsideSqlContext    *OutsideSqlContext
+	SqlClause interface{}
 	//SqlAnalyzerFactory *SqlAnalyzerFactory
 }
 
@@ -70,26 +71,20 @@ type OutsideSqlContext struct {
 	OutsideSqlPath string
 }
 
-func (o *OutsideSqlContext) readFilteredOutsideSql(suffix string) (string,error) {
-	sql,err1 := o.readPlainOutsideSql(suffix)
-	if err1!=nil{
-		return "",err1
-	}	
-	rsql,err := o.replaceOutsideSqlBindCharacterOnLineComment(sql)
-	if err!=nil{
-		return "",err
-	}
+func (o *OutsideSqlContext) readFilteredOutsideSql(suffix string) string {
+	sql := o.readPlainOutsideSql(suffix)
+	rsql := o.replaceOutsideSqlBindCharacterOnLineComment(sql)
 	//        if (_outsideSqlFilter != null) {
 	//            sql = _outsideSqlFilter.filterReading(sql);
 	//        }
 	//        return sql;
-	return rsql,nil
+	return rsql
 }
-func (o *OutsideSqlContext) replaceOutsideSqlBindCharacterOnLineComment(sql string) (string,error) {
+func (o *OutsideSqlContext) replaceOutsideSqlBindCharacterOnLineComment(sql string) string {
 	//fmt.Println(sql)
 	bindCharacter := "?"
 	if strings.Index(sql, bindCharacter) < 0 {
-		return sql,nil
+		return sql
 	}
 	//        if (sql.indexOf(bindCharacter) < 0) {
 	//            return sql;
@@ -123,17 +118,17 @@ func (o *OutsideSqlContext) replaceOutsideSqlBindCharacterOnLineComment(sql stri
 	//            sb.append(line.substring(0, lineCommentIndex)).append(filteredLineComment).append(lineSeparator);
 	//        }
 	//        return sb.toString();
-	return "",errors.New("replaceOutsideSqlBindCharacterOnLineComment")
+	panic("replaceOutsideSqlBindCharacterOnLineComment")
 }
-func (o *OutsideSqlContext) readPlainOutsideSql(suffix string) (string,error) {
+func (o *OutsideSqlContext) readPlainOutsideSql(suffix string) string {
 	standardPath := o.OutsideSqlPath
 	readSql, err := ioutil.ReadFile(standardPath)
 	var sql string = string(readSql)
 	if err != nil {
-		return "",errors.New("Can't read sql file:" + standardPath)
+		panic("Can't read sql file:" + standardPath)
 	}
 	if sql == "" {
-		return "",errors.New("Sql file has no content:" + standardPath)
+		panic("Sql file has no content:" + standardPath)
 	}
 	//        String readSql = doReadPlainOutsideSql(sqlFileEncoding, dbmsSuffix, standardPath);
 	//        if (readSql != null) {
@@ -152,7 +147,7 @@ func (o *OutsideSqlContext) readPlainOutsideSql(suffix string) (string,error) {
 	//        }
 	//        throwOutsideSqlNotFoundException(standardPath);
 	//        return null; // unreachable
-	return sql,nil
+	return sql
 }
 
 func (o *OutsideSqlContext) generateSpecifiedOutsideSqlUniqueKey(methodName string, path string, pmb interface{}, option *OutsideSqlOption, resultType string) string {

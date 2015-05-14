@@ -19,7 +19,19 @@ import (
 	"bytes"
 	"strings"
 )
-
+func StringCount(s string, ele string)int{
+	count:=0
+	for (true){
+		pos:=strings.Index(s,ele)
+		if pos > -1 {
+			count ++
+			s=s[pos+len(ele):]
+		} else{
+			break
+		}
+	}
+	return count
+}
 func IndexAfter(s string, find string, spos int) int {
 	pos := strings.Index(s[spos:], find)
 	if pos == -1 {

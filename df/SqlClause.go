@@ -24,6 +24,18 @@ import (
 	"strings"
 )
 
+const (
+	SelectClauseType_COLUMNS        = 0
+	SelectClauseType_UNIQUE_COUNT   = 1
+	SelectClauseType_PLAIN_COUNT    = 2
+	SelectClauseType_COUNT_DISTINCT = 3
+	SelectClauseType_MAX            = 4
+	SelectClauseType_MIN            = 5
+	SelectClauseType_SUM            = 6
+	SelectClauseType_AVE            = 7
+	RELATION_PATH_DELIMITER         = "_"
+)
+
 type SqlClause interface {
 	setTableDbName(tn string)
 	GetTableDbName() string
@@ -33,54 +45,209 @@ type SqlClause interface {
 	GetOrderByClause() *OrderByClause
 	IsOrScopeQueryEffective() bool
 	IsOrScopeQueryAndPartEffective() bool
-	RegisterWhereClause(crn *ColumnRealName, key *ConditionKey, cvalue *ConditionValue, co *ConditionOption, usedAliasName string)
+	RegisterWhereClause(crn *ColumnRealName, key *ConditionKey,
+		cvalue *ConditionValue, co *ConditionOption, usedAliasName string)
 	GetWhereList() *List
 	SetDBMeta(dm *DBMeta)
 	SetUseSelectIndex(si bool)
 	GetClause() string
-	RegisterBaseTableInlineWhereClause(columnSqlName *ColumnSqlName, key *ConditionKey, cvalue *ConditionValue, option *ConditionOption)
+	RegisterBaseTableInlineWhereClause(columnSqlName *ColumnSqlName,
+		key *ConditionKey, cvalue *ConditionValue, option *ConditionOption)
 	MakeOrScopeQueryEffective()
 	CloseOrScopeQuery()
 	BeginOrScopeQueryAndPart()
 	EndOrScopeQueryAndPart()
 	AllowEmptyStringQuery()
 	IsAllowEmptyStringQuery() bool
+	ResolveRelationNo(localTableName string, foreignPropertyName string) int
+	ResolveJoinAliasName(relationPath string) string
+	RegisterOuterJoin(foreignAliasName string, foreignTableDbName string, localAliasName string,
+		localTableDbName string, joinOnMap map[*ColumnRealName]*ColumnRealName,
+		foreignInfo *ForeignInfo, fixedCondition string, resolver *FixedConditionResolver)
+	RegisterSelectedRelation(foreignTableAliasName string, TableDbName string,
+		foreignPropertyName string, localRelationPath string,
+		foreignRelationPath string, foreignTableDbName string)
+	DoFetchPage()
+	DoClearFetchPageClause()
+	DoFetchFirst()
+	FetchFirst(fetchSize int)
+	CreateFromHint() string
+	CreateSqlSuffix() string
+	CreateSelectHint() string
+	GetBaseSqlClause() *BaseSqlClause
 }
 
 type BaseSqlClause struct {
 	TableDbName string
 	//SqlSetting is copy for DBCurrent can chage setting
-	SqlSetting                   *DBCurrent
-	BasePorintAliasName          string
-	OrderByClause                *OrderByClause
-	OrScopeQueryEffective        bool
-	WhereList                    *List
-	Inline                       bool
-	OnClause                     bool
-	DBMeta                       *DBMeta
-	UseSelectIndex               bool
-	SelectIndexMap               *StringKeyMap
-	BaseTableInlineWhereList     *List
-	orScopeQueryAndPartEffective bool
-	currentTmpOrScopeQueryInfo   *OrScopeQueryInfo
-	orScopeQueryAndPartIdentity  int
-	outerJoinMap                 map[string]*LeftOuterJoinInfo
-	emptyStringQueryAllowed bool
+	SqlSetting                         *DBCurrent
+	BasePorintAliasName                string
+	OrderByClause                      *OrderByClause
+	OrScopeQueryEffective              bool
+	WhereList                          *List
+	Inline                             bool
+	OnClause                           bool
+	DBMeta                             *DBMeta
+	UseSelectIndex                     bool
+	SelectIndexMap                     *StringKeyMap
+	SelectIndexReverseMap              *StringKeyMap
+	BaseTableInlineWhereList           *List
+	OrScopeQueryAndPartEffective       bool
+	currentTmpOrScopeQueryInfo         *OrScopeQueryInfo
+	orScopeQueryAndPartIdentity        int
+	outerJoinMap                       map[string]*LeftOuterJoinInfo
+	outerJoinList                      StringList
+	emptyStringQueryAllowed            bool
+	subQueryLevel                      int
+	whereUsedInnerJoinAllowed          bool
+	orScopeQueryEffective              bool
+	InnerJoinLazyReflector             *List
+	pagingAdjustment                   bool
+	pagingCountLeastJoin               bool
+	unionQueryInfoList                 *List
+	selectClauseType                   *SelectClauseType
+	structuralPossibleInnerJoinAllowed bool
+	checkInvalidQuery                  bool
+	disableSelectIndex                 bool
+	selectedRelationBasicMap           map[string]string
+	selectedRelationColumnMap          map[string]*List
+	selectecNextConnectingRelationMap  map[string]string
+	selectClauseRealColumnAliasMap     map[string]string
+	selectClauseInfo                   StringList
+	fetchScopeEffective                bool
+	fetchStartIndex                    int
+	fetchSize                          int
+	fetchPageNumber                    int
+	sqlClause                          *SqlClause
 }
-func (b *BaseSqlClause) IsAllowEmptyStringQuery() bool{
+func (b *BaseSqlClause) GetBaseSqlClause() *BaseSqlClause{
+	return b
+}
+func (b *BaseSqlClause) FetchFirst(fetchSize int) {
+	b.fetchScopeEffective = true
+	if fetchSize < 0 {
+		panic("Argument[fetchSize] should be plus")
+	}
+	b.fetchStartIndex = 0
+	b.fetchSize = fetchSize
+	b.fetchPageNumber = 1
+	(*b.sqlClause).DoClearFetchPageClause()
+	(*b.sqlClause).DoFetchFirst()
+}
+func (b *BaseSqlClause) getPageStartIndex() int {
+	if b.fetchPageNumber <= 0 {
+		panic("fetchPageNumber must be plus ")
+	}
+	return b.fetchStartIndex + b.fetchSize*(b.fetchPageNumber-1)
+}
+func (b *BaseSqlClause) getSelectClauseRealColumnAliasMap() map[string]string {
+	if b.selectClauseRealColumnAliasMap == nil {
+		b.selectClauseRealColumnAliasMap = make(map[string]string)
+	}
+	return b.selectClauseRealColumnAliasMap
+}
+func (b *BaseSqlClause) RegisterSelectedRelation(foreignTableAliasName string, TableDbName string,
+	foreignPropertyName string, localRelationPath string,
+	foreignRelationPath string, foreignTableDbName string) {
+	//        assertObjectNotNull("foreignTableAliasName", foreignTableAliasName);
+	//        assertObjectNotNull("localTableDbName", localTableDbName);
+	//        assertObjectNotNull("foreignPropertyName", foreignPropertyName);
+	//        assertObjectNotNull("foreignRelationPath", foreignRelationPath);
+	if b.selectedRelationBasicMap == nil {
+		b.selectedRelationBasicMap = make(map[string]string)
+	}
+	b.selectedRelationBasicMap[foreignRelationPath] = foreignPropertyName
+	columnMap := b.createSelectedSelectColumnInfo(foreignTableAliasName,
+		TableDbName, foreignPropertyName, localRelationPath, foreignTableDbName)
+	if b.selectedRelationColumnMap == nil {
+		b.selectedRelationColumnMap = make(map[string]*List)
+	}
+	b.selectedRelationColumnMap[foreignTableAliasName] = columnMap
+	b.analyzeSelectedNextConnectingRelation(foreignRelationPath)
+}
+func (b *BaseSqlClause) createSelectedSelectColumnInfo(foreignTableAliasName string,
+	localTableDbName string, foreignPropertyName string, localRelationPath string,
+	foreignTableDbName string) *List {
+	dbmeta := DBMetaProvider_I.TableDbNameInstanceMap[localTableDbName]
+	foreignInfo := (*dbmeta).FindForeignInfo(foreignPropertyName)
+	relationNo := foreignInfo.RelationNo
+	nextRelationPath := RELATION_PATH_DELIMITER + strconv.Itoa(relationNo)
+	if localRelationPath != "" {
+		nextRelationPath = localRelationPath + nextRelationPath
+	}
+	resultList := new(List)
+	foreignDBMeta := DBMetaProvider_I.TableDbNameInstanceMap[foreignTableDbName]
+	columnInfoList := (*foreignDBMeta).GetColumnInfoList()
+	for _, col := range columnInfoList.data {
+		columnInfo := col.(*ColumnInfo)
+		columnDbName := columnInfo.ColumnDbName
+		selectColumnInfo := new(SelectedRelationColumn)
+		selectColumnInfo.tableAliasName = foreignTableAliasName
+		selectColumnInfo.columnInfo = columnInfo
+		selectColumnInfo.columnAliasName = columnDbName + nextRelationPath
+		resultList.Add(selectColumnInfo)
+	}
+	return resultList
+}
+func (b *BaseSqlClause) analyzeSelectedNextConnectingRelation(
+	foreignRelationPath string) {
+	if len(foreignRelationPath) <= 3 { // fast check e.g. _12, _3
+		return // three characters cannot make two elements
+	}
+	delimiter := RELATION_PATH_DELIMITER
+	delimiterCount := StringCount(foreignRelationPath, delimiter)
+	if delimiterCount < 2 { // has no previous relation
+		return
+	}
+	previousPath := substringLastFront(foreignRelationPath, delimiter)
+	if b.selectecNextConnectingRelationMap == nil {
+		b.selectecNextConnectingRelationMap = make(map[string]string)
+	}
+	b.selectecNextConnectingRelationMap[previousPath] = previousPath
+}
+func (b *BaseSqlClause) RegisterOuterJoin(foreignAliasName string,
+	foreignTableDbName string, localAliasName string,
+	localTableDbName string, joinOnMap map[*ColumnRealName]*ColumnRealName,
+	foreignInfo *ForeignInfo, fixedCondition string,
+	fixedConditionResolver *FixedConditionResolver) {
+	//        assertAlreadyOuterJoin(foreignAliasName);
+	//        assertJoinOnMapNotEmpty(joinOnMap, foreignAliasName);
+	outerJoinMap := b.getOuterJoinMap()
+	joinInfo := new(LeftOuterJoinInfo)
+	joinInfo.foreignAliasName = foreignAliasName
+	joinInfo.foreignTableDbName = foreignTableDbName
+	joinInfo.localAliasName = localAliasName
+	joinInfo.localTableDbName = localTableDbName
+	joinInfo.joinOnMap = joinOnMap
+	localJoinInfo := outerJoinMap[localAliasName]
+	if localJoinInfo != nil { // means local is also joined (not base point)
+		joinInfo.localJoinInfo = localJoinInfo
+	}
+	joinInfo.pureFK = foreignInfo.IsPureFK()
+	joinInfo.notNullFKColumn = foreignInfo.IsNotNullFKColumn()
+	joinInfo.fixedCondition = fixedCondition
+	joinInfo.fixedConditionResolver = fixedConditionResolver
+	//        // it should be resolved before registration because
+	//        // the process may have Query(Relation) as precondition
+	joinInfo.ResolveFixedCondition()
+	outerJoinMap[foreignAliasName] = joinInfo
+	b.outerJoinList.Add(foreignAliasName)
+}
+
+func (b *BaseSqlClause) IsAllowEmptyStringQuery() bool {
 	return b.emptyStringQueryAllowed
 }
-func (b *BaseSqlClause) AllowEmptyStringQuery(){
+func (b *BaseSqlClause) AllowEmptyStringQuery() {
 	b.emptyStringQueryAllowed = true
 }
 func (b *BaseSqlClause) EndOrScopeQueryAndPart() {
 	//assertCurrentTmpOrScopeQueryInfo();
-	b.orScopeQueryAndPartEffective = false
+	b.OrScopeQueryAndPartEffective = false
 }
 func (b *BaseSqlClause) BeginOrScopeQueryAndPart() {
 	//assertCurrentTmpOrScopeQueryInfo();
 	b.orScopeQueryAndPartIdentity++
-	b.orScopeQueryAndPartEffective = true
+	b.OrScopeQueryAndPartEffective = true
 }
 func (b *BaseSqlClause) CloseOrScopeQuery() {
 	//	        assertCurrentTmpOrScopeQueryInfo();
@@ -95,7 +262,13 @@ func (b *BaseSqlClause) CloseOrScopeQuery() {
 func (b *BaseSqlClause) clearOrScopeQuery() {
 	b.currentTmpOrScopeQueryInfo = nil
 	b.OrScopeQueryEffective = false
-	b.orScopeQueryAndPartEffective = false
+	b.OrScopeQueryAndPartEffective = false
+}
+func (b *BaseSqlClause) getOuterJoinMap() map[string]*LeftOuterJoinInfo {
+	if b.outerJoinMap == nil {
+		b.outerJoinMap = make(map[string]*LeftOuterJoinInfo)
+	}
+	return b.outerJoinMap
 }
 func (b *BaseSqlClause) reflectTmpOrClauseToRealObject(localInfo *OrScopeQueryInfo) {
 	reflector := new(OrScopeQueryReflector)
@@ -105,13 +278,9 @@ func (b *BaseSqlClause) reflectTmpOrClauseToRealObject(localInfo *OrScopeQueryIn
 	if b.BaseTableInlineWhereList == nil {
 		b.BaseTableInlineWhereList = new(List)
 	}
-	if b.outerJoinMap == nil {
-		b.outerJoinMap = make(map[string]*LeftOuterJoinInfo)
-	}
 	reflector.whereList = b.WhereList
 	reflector.baseTableInlineWhereList = b.BaseTableInlineWhereList
-	reflector.outerJoinMap = b.outerJoinMap
-
+	reflector.outerJoinMap = b.getOuterJoinMap()
 	reflector.reflectTmpOrClauseToRealObject(localInfo)
 }
 func (b *BaseSqlClause) MakeOrScopeQueryEffective() {
@@ -171,12 +340,12 @@ func (b *BaseSqlClause) GetClause() string {
 }
 func (b *BaseSqlClause) BuildClauseWithoutMainSelect(sb *bytes.Buffer, selectClause string) {
 	b.BuildFromClause(sb)
-	//        sb.append(getFromHint());
+	sb.WriteString((*b.sqlClause).CreateFromHint())
 	b.BuildWhereClause(sb)
 	//        sb.append(deleteUnionWhereTemplateMark(prepareUnionClause(selectClause)));
 	//	        if (!b.needsUnionNormalSelectEnclosing()) {
 	sb.WriteString(b.PrepareClauseOrderBy())
-	//            sb.append(prepareClauseSqlSuffix());
+	sb.WriteString((*b.sqlClause).CreateSqlSuffix())
 	//	       }
 	return
 }
@@ -263,40 +432,277 @@ func (b *BaseSqlClause) FilterWhereClauseSimply(clauseElement string) string {
 	//        }
 	//            return clauseElement;
 }
+func (b *BaseSqlClause) isJoinInParentheses() bool {
+	//defalult implementation
+	return false
+}
 func (b *BaseSqlClause) BuildFromClause(sb *bytes.Buffer) {
 	sb.WriteString("\n  from ")
-	//	        sb.append(ln()).append("  ");
-	//        sb.append("from ");
-	//        int tablePos = 7; // basically for in-line view indent
-	tablePos := 7
+	tablePos := 7 // basically for in-line view indent
 	tablePos = tablePos
-	//        if (isJoinInParentheses()) {
-	//            for (int i = 0; i < getOuterJoinMap().size(); i++) {
-	//                sb.append("(");
-	//                ++tablePos;
-	//            }
-	//        }
-	//        final TableSqlName tableSqlName = getDBMeta().getTableSqlName();
+	if b.isJoinInParentheses() {
+		for i := 0; i < len(b.outerJoinMap); i++ {
+			sb.WriteString("(")
+			tablePos++
+		}
+	}
 	tableSqlName := (*b.DBMeta).GetTableSqlName()
-	//        final String basePointAliasName = getBasePointAliasName();
 	basePointAliasName := b.BasePorintAliasName
-	//        if (hasBaseTableInlineWhereClause()) {
-	//            final List<QueryClause> baseTableInlineWhereList = getBaseTableInlineWhereList();
-	//            sb.append(getInlineViewClause(tableSqlName, baseTableInlineWhereList, tablePos));
-	//            sb.append(" ").append(basePointAliasName);
-	//        } else {
-	//            sb.append(tableSqlName).append(" ").append(basePointAliasName);
-	sb.WriteString(tableSqlName.TableSqlName + " " + basePointAliasName)
-	//        }
-	//        sb.append(getFromBaseTableHint());
-	//        sb.append(getLeftOuterJoinClause());
+	if b.hasBaseTableInlineWhereClause() {
+		baseTableInlineWhereList := b.BaseTableInlineWhereList
+		sb.WriteString(b.getInlineViewClause(tableSqlName, baseTableInlineWhereList, tablePos))
+		sb.WriteString(" " + basePointAliasName)
+	} else {
+		sb.WriteString(tableSqlName.TableSqlName + " " + basePointAliasName)
+	}
+	sb.WriteString(b.createFromBaseTableHint())
+	sb.WriteString(b.getLeftOuterJoinClause())
 	return
+}
+func (b *BaseSqlClause) checkFixedConditionLazily() {
+	//not implemented yet
+}
+func (b *BaseSqlClause) reflectInnerJoinAutoDetectLazily() {
+	if b.InnerJoinLazyReflector == nil {
+		return
+	}
+	reflectorList := b.InnerJoinLazyReflector
+	reflectorList = reflectorList
+	for i := 0; i < reflectorList.Size(); i++ {
+		reflector := (reflectorList.Get(i)).(*InnerJoinLazyReflector)
+		(*reflector).Reflect()
+	}
+	b.InnerJoinLazyReflector = new(List)
+}
+func (b *BaseSqlClause) canPagingCountLeastJoin() bool {
+	return b.pagingAdjustment && b.pagingCountLeastJoin
+}
+func (b *BaseSqlClause) isSelectClauseTypeNonUnionCount() bool {
+	return !b.hasUnionQuery() && b.selectClauseType.count
+}
+func (b *BaseSqlClause) hasUnionQuery() bool {
+	return b.unionQueryInfoList != nil && b.unionQueryInfoList.Size() > 0
+}
+func (b *BaseSqlClause) hasFixedConditionOverRelationJoin() bool {
+	for key := range b.outerJoinMap {
+		joinInfo := b.outerJoinMap[key]
+		if joinInfo.fixedConditionOverRelation {
+			// because over-relation may have references of various relations
+			return true
+		}
+	}
+	return false
+}
+func (b *BaseSqlClause) checkCountLeastJoinAllowed() bool {
+	if !b.canPagingCountLeastJoin() {
+		return false
+	}
+	if !b.isSelectClauseTypeNonUnionCount() {
+		return false
+	}
+	return !b.hasFixedConditionOverRelationJoin()
+}
+func (b *BaseSqlClause) checkStructuralPossibleInnerJoinAllowed() bool {
+	if !b.structuralPossibleInnerJoinAllowed {
+		return false
+	}
+	return !b.hasFixedConditionOverRelationJoin()
+}
+func (b *BaseSqlClause) canBeCountLeastJoin(joinInfo *LeftOuterJoinInfo) bool {
+	return !joinInfo.IsCountableJoin()
+}
+func (b *BaseSqlClause) getLeftOuterJoinClause() string {
+	sb := new(bytes.Buffer)
+	b.checkFixedConditionLazily()
+	b.reflectInnerJoinAutoDetectLazily()
+	countLeastJoinAllowed := b.checkCountLeastJoinAllowed()
+	structuralPossibleInnerJoinAllowed := b.checkStructuralPossibleInnerJoinAllowed()
+	for _, key := range b.outerJoinList.data {
+		foreignAliasName := key
+		joinInfo := b.outerJoinMap[key]
+		if countLeastJoinAllowed && b.canBeCountLeastJoin(joinInfo) {
+			continue // means only joined countable
+		}
+		b.buildLeftOuterJoinClause(sb, foreignAliasName, joinInfo, structuralPossibleInnerJoinAllowed)
+	}
+	return sb.String()
+}
+func (b *BaseSqlClause) canBeInnerJoin(joinInfo *LeftOuterJoinInfo,
+	structuralPossibleInnerJoinAllowed bool) bool {
+	if joinInfo.innerJoin {
+		return true
+	}
+
+	if structuralPossibleInnerJoinAllowed {
+		return joinInfo.isStructuralPossibleInnerJoin()
+	}
+	return false
+}
+func (b *BaseSqlClause) buildLeftOuterJoinClause(sb *bytes.Buffer, foreignAliasName string, joinInfo *LeftOuterJoinInfo,
+	structuralPossibleInnerJoinAllowed bool) {
+	joinOnMap := joinInfo.joinOnMap
+	// not implemented yet
+	//        assertJoinOnMapNotEmpty(joinOnMap, foreignAliasName);
+
+	sb.WriteString(Ln + "   ")
+	joinExp := ""
+	canBeInnerJoin := b.canBeInnerJoin(joinInfo, structuralPossibleInnerJoinAllowed)
+	if canBeInnerJoin {
+		joinExp = " inner join "
+	} else {
+		joinExp = " left outer join " // is main!
+	}
+	sb.WriteString(joinExp) // is main!
+	b.buildJoinTableClause(sb, joinInfo, joinExp, canBeInnerJoin)
+	sb.WriteString(" " + foreignAliasName)
+	if joinInfo.hasInlineOrOnClause() || joinInfo.hasFixedCondition() {
+		sb.WriteString(Ln + "     ") // only when additional conditions exist
+	}
+	sb.WriteString(" on ")
+	b.buildJoinOnClause(sb, joinInfo, joinOnMap)
+	if b.isJoinInParentheses() {
+		sb.WriteString(")")
+	}
+}
+func (b *BaseSqlClause) buildJoinOnClause(sb *bytes.Buffer,
+	joinInfo *LeftOuterJoinInfo, joinOnMap map[*ColumnRealName]*ColumnRealName) {
+	currentConditionCount := 0
+	currentConditionCount = b.doBuildJoinOnClauseBasic(sb, joinInfo, joinOnMap, currentConditionCount)
+	currentConditionCount = b.doBuildJoinOnClauseFixed(sb, joinInfo, joinOnMap, currentConditionCount)
+	currentConditionCount = b.doBuildJoinOnClauseAdditional(sb, joinInfo, joinOnMap, currentConditionCount)
+
+}
+func (b *BaseSqlClause) doBuildJoinOnClauseBasic(sb *bytes.Buffer,
+	joinInfo *LeftOuterJoinInfo,
+	joinOnMap map[*ColumnRealName]*ColumnRealName, currentConditionCount int) int {
+	for key := range joinOnMap {
+		localRealName := key
+		foreignRealName := joinOnMap[key]
+		if currentConditionCount > 0 {
+			sb.WriteString(" and ")
+		}
+		sb.WriteString(localRealName.ToString() + " = " +
+			foreignRealName.ToString())
+		currentConditionCount++
+	}
+	return currentConditionCount
+}
+func (b *BaseSqlClause) doBuildJoinOnClauseFixed(sb *bytes.Buffer,
+	joinInfo *LeftOuterJoinInfo,
+	joinOnMap map[*ColumnRealName]*ColumnRealName, currentConditionCount int) int {
+	if joinInfo.hasFixedCondition() {
+		fixedCondition := joinInfo.fixedCondition
+		if b.isInlineViewOptimizedCondition(fixedCondition) {
+			return currentConditionCount
+		}
+		sb.WriteString(Ln + "    ")
+		if currentConditionCount > 0 {
+			sb.WriteString(" and ")
+		}
+
+		sb.WriteString(fixedCondition)
+		currentConditionCount++
+	}
+	return currentConditionCount
+}
+func (b *BaseSqlClause) doBuildJoinOnClauseAdditional(sb *bytes.Buffer,
+	joinInfo *LeftOuterJoinInfo,
+	joinOnMap map[*ColumnRealName]*ColumnRealName, currentConditionCount int) int {
+	additionalOnClauseList := joinInfo.additionalOnClauseList
+	for _, clause := range additionalOnClauseList.data {
+		additionalOnClause := clause.(*QueryClause)
+		sb.WriteString(Ln + "    ")
+		if currentConditionCount > 0 {
+			sb.WriteString(" and ")
+		}
+		sb.WriteString((*additionalOnClause).ToString())
+		currentConditionCount++
+	}
+	return currentConditionCount
+}
+func (b *BaseSqlClause) isInlineViewOptimizedCondition(fixedCondition string) bool {
+	return OPTIMIZED_MARK == fixedCondition
+}
+func (b *BaseSqlClause) buildJoinTableClause(sb *bytes.Buffer,
+	joinInfo *LeftOuterJoinInfo, joinExp string, canBeInnerJoin bool) {
+	foreignTableDbName := joinInfo.foreignTableDbName
+	tablePos := 3 + len(joinExp) // basically for in-line view indent
+	foreignDBMeta := DBMetaProvider_I.TableDbNameInstanceMap[foreignTableDbName]
+	foreignTableSqlName := (*foreignDBMeta).GetTableSqlName()
+	inlineWhereClauseList := &joinInfo.inlineWhereClauseList
+	tableExp := ""
+	if inlineWhereClauseList.Size() == 0 {
+		tableExp = foreignTableSqlName.TableSqlName
+	} else {
+		tableExp = b.getInlineViewClause(foreignTableSqlName, inlineWhereClauseList, tablePos)
+	}
+	if joinInfo.hasFixedCondition() {
+		sb.WriteString(joinInfo.resolveFixedInlineView(tableExp, canBeInnerJoin))
+	} else {
+		sb.WriteString(tableExp)
+	}
+}
+func (b *BaseSqlClause) createFromBaseTableHint() string {
+	//default implementation
+	return ""
+}
+func (b *BaseSqlClause) getInlineViewBasePointAlias() string {
+	return "dfinlineloc"
+}
+func (b *BaseSqlClause) BuildSpaceBar(size int) string {
+	sb := new(bytes.Buffer)
+	for i := 0; i < size; i++ {
+		sb.WriteString(" ")
+	}
+	return sb.String()
+}
+func (b *BaseSqlClause) getInlineViewClause(inlineTableSqlName *TableSqlName, inlineWhereClauseList *List, tablePos int) string {
+	inlineBaseAlias := b.getInlineViewBasePointAlias()
+	sb := new(bytes.Buffer)
+	sb.WriteString("(select * from " + inlineTableSqlName.TableSqlName + " " + inlineBaseAlias)
+	baseIndent := b.BuildSpaceBar(tablePos + 1)
+	sb.WriteString(Ln + baseIndent)
+	sb.WriteString(" where ")
+	count := 0
+	for i := 0; i < inlineWhereClauseList.Size(); i++ {
+		whereClause := (inlineWhereClauseList.Get(i)).(*QueryClause)
+		clauseElement := b.FilterWhereClauseSimply((*whereClause).ToString())
+		if count > 0 {
+			sb.WriteString(Ln + baseIndent)
+			sb.WriteString("   and ")
+		}
+		sb.WriteString(clauseElement)
+		count++
+	}
+	sb.WriteString(")")
+	return sb.String()
+}
+func (b *BaseSqlClause) hasBaseTableInlineWhereClause() bool {
+	return b.BaseTableInlineWhereList != nil && b.BaseTableInlineWhereList.Size() > 0
+}
+func (b *BaseSqlClause) isSelectClauseNonUnionScalar() bool{
+	return !b.hasUnionQuery() && b.isSelectClauseTypeScalar()
+}
+func (b *BaseSqlClause) isSelectClauseTypeScalar() bool{
+	return b.selectClauseType != nil && b.selectClauseType.scalar
+}
+func (b *BaseSqlClause) isSelectClauseTypeCount() bool {
+	return b.selectClauseType.count
+}
+func (b *BaseSqlClause) buildSelectClauseCount() string{
+	return "select count(*)"
+}
+func (b *BaseSqlClause) buildSelectClauseScalar(aliasName string) string{
+        if (b.isSelectClauseTypeCount()) {
+            return b.buildSelectClauseCount()
+        } 
+        panic("System Error Not Implemented Yet. buildSelectClauseScalar")
 }
 func (b *BaseSqlClause) GetSelectClause() string {
 	//	        reflectClauseLazilyIfExists();
-	//        if (isSelectClauseNonUnionScalar()) {
-	//            return buildSelectClauseScalar(getBasePointAliasName());
-	//        }
+	        if (b.isSelectClauseNonUnionScalar()) {
+	            return b.buildSelectClauseScalar(b.BasePorintAliasName)
+	        }
 	//        // if it's a scalar-select, it always has union-query since here
 	//        final StringBuilder sb = new StringBuilder();
 	//
@@ -313,13 +719,63 @@ func (b *BaseSqlClause) GetSelectClause() string {
 	//
 	//        return sb.toString();
 	// current 3
-	sb, selectIndex := b.ProcessSelectClauseLocal()
+	sb := new(bytes.Buffer)
+	selectIndex := b.ProcessSelectClauseLocal(sb)
+	b.processSelectClauseRelation(sb, selectIndex)
 	selectIndex = selectIndex
-	log.InternalDebug("Select clause =" + sb)
-	return sb
+	log.InternalDebug("Select clause =" + sb.String())
+	return sb.String()
 }
-func (b *BaseSqlClause) ProcessSelectClauseLocal() (string, int32) {
-	var sb string = ""
+func (b *BaseSqlClause) processSelectClauseRelation(sb *bytes.Buffer, selectIndex int32) {
+	//selectedRelationColumnMap map[string]map[string]*SelectedRelationColumn
+	columnMap := b.selectedRelationColumnMap
+	for key := range columnMap {
+		cmap := columnMap[key]
+		//            Map<String, HpSpecifiedColumn> foreginSpecifiedMap = null;
+		//            if (_specifiedSelectColumnMap != null) {
+		//                foreginSpecifiedMap = _specifiedSelectColumnMap.get(tableAliasName);
+		//            }
+
+		validSpecifiedForeign := false
+		validSpecifiedForeign = validSpecifiedForeign
+		finishedForeignIndent := false
+		for _, rc := range cmap.data {
+			selectColumnInfo := rc.(*SelectedRelationColumn)
+			columnInfo := selectColumnInfo.columnInfo
+			columnDbName := columnInfo.ColumnDbName
+			columnDbName = columnDbName
+			//                if (validSpecifiedForeign && !foreginSpecifiedMap.containsKey(columnDbName)) {
+			//                    continue;
+			//                }
+			realColumnName := selectColumnInfo.BuildRealColumnSqlName()
+			b.selectClauseInfo.Add(realColumnName)
+			columnAliasName := selectColumnInfo.columnAliasName
+			onQueryName := ""
+			selectIndex++
+			if b.UseSelectIndex {
+				onQueryName = b.BuildSelectIndexAlias(columnInfo.ColumnSqlName, columnAliasName, selectIndex)
+				b.registerSelectIndex(columnAliasName, onQueryName, selectIndex)
+
+			} else {
+				onQueryName = columnAliasName
+			}
+			if !finishedForeignIndent {
+				sb.WriteString(Ln + "     ")
+				finishedForeignIndent = true
+			}
+			sb.WriteString(", ")
+			sb.WriteString(realColumnName + " as " + onQueryName)
+			b.selectClauseRealColumnAliasMap[realColumnName] = onQueryName
+			//                if (validSpecifiedForeign && foreginSpecifiedMap.containsKey(columnDbName)) {
+			//                    final HpSpecifiedColumn specifiedColumn = foreginSpecifiedMap.get(columnDbName);
+			//                    specifiedColumn.setOnQueryName(onQueryName); // basically for queryInsert()
+			//                }
+		}
+	}
+	//        return selectIndex;
+	return
+}
+func (b *BaseSqlClause) ProcessSelectClauseLocal(sb *bytes.Buffer) int32 {
 	//        final String basePointAliasName = getBasePointAliasName();
 	basePointAliasName := b.BasePorintAliasName
 	//        final DBMeta dbmeta = getDBMeta();
@@ -380,7 +836,7 @@ func (b *BaseSqlClause) ProcessSelectClauseLocal() (string, int32) {
 		//            if (needsDelimiter) {
 		//                sb.append(", ");
 		if needsDelimiter {
-			sb += ", "
+			sb.WriteString(", ")
 		} else {
 			//            } else {
 			//                sb.append("select");
@@ -388,39 +844,39 @@ func (b *BaseSqlClause) ProcessSelectClauseLocal() (string, int32) {
 			//                sb.append(" ");
 			//                needsDelimiter = true;
 			//            }
-			sb += "select/*$pmb.selectHint*/ "
+			sb.WriteString("select/*$pmb.BaseConditionBean.SelectHint*/ ")
 			needsDelimiter = true
 		}
-
-		//            final String realColumnName = basePointAliasName + "." + columnSqlName;
 		realColumnName := basePointAliasName + "." + columnSqlName.ColumnSqlName
+		b.selectClauseInfo.Add(realColumnName)
 		var onQueryName string
-		//            final String onQueryName;
-		//            ++selectIndex;
 		selectIndex++
-		//            if (_useSelectIndex) {
-		//                onQueryName = buildSelectIndexAlias(columnSqlName, null, selectIndex);
-		//                registerSelectIndex(columnDbName, onQueryName, selectIndex);
 		if b.UseSelectIndex {
 			onQueryName = b.BuildSelectIndexAlias(columnSqlName, "", selectIndex)
+			b.registerSelectIndex(columnDbName, onQueryName, selectIndex)
 		} else {
-			//            } else {
-			//                onQueryName = columnSqlName.toString();
-			//            }
 			onQueryName = columnSqlName.ColumnSqlName
 		}
 		//            sb.append(decryptSelectColumnIfNeeds(columnInfo, realColumnName)).append(" as ").append(onQueryName);
-		sb += realColumnName + " as " + onQueryName
-		//            getSelectClauseRealColumnAliasMap().put(realColumnName, onQueryName);
-		//
+		sb.WriteString(realColumnName + " as " + onQueryName)
+		b.getSelectClauseRealColumnAliasMap()[realColumnName] = onQueryName
 		//            if (validSpecifiedLocal && localSpecifiedMap.containsKey(columnDbName)) {
 		//                final HpSpecifiedColumn specifiedColumn = localSpecifiedMap.get(columnDbName);
 		//                specifiedColumn.setOnQueryName(onQueryName); // basically for queryInsert()
 		//            }
 		//        }
 	}
-	//        return selectIndex;
-	return sb, selectIndex
+	return selectIndex
+}
+func (b *BaseSqlClause) registerSelectIndex(keyName string, onQueryName string, selectIndex int32) {
+	if b.SelectIndexMap == nil {
+		b.SelectIndexMap = CreateAsFlexible()
+	}
+	b.SelectIndexMap.Put(keyName, selectIndex)
+	if b.SelectIndexReverseMap == nil {
+		b.SelectIndexReverseMap = CreateAsFlexible()
+	}
+	b.SelectIndexReverseMap.Put(onQueryName, keyName)
 }
 func (b *BaseSqlClause) BuildSelectIndexAlias(columnSqlName *ColumnSqlName, aliasName string, selectIndex int32) string {
 	if columnSqlName.IrregularChar {
@@ -471,6 +927,16 @@ func (b *BaseSqlClause) setSqlSetting(dc *DBCurrent) {
 	b.SqlSetting = &dcx
 	//		(dcx).PagingCountLater=true
 	//	fmt.Printf("ok??? %v %v\n",(*dc).PagingCountLater,(dcx).PagingCountLater)
+	if dcx.InnerJoinAutoDetect {
+		b.whereUsedInnerJoinAllowed = true
+		b.structuralPossibleInnerJoinAllowed = true
+	}
+	if dcx.EmptyStringQueryAllowed {
+		b.emptyStringQueryAllowed = true
+	}
+	if dcx.DisableSelectIndex {
+		b.disableSelectIndex = true
+	}
 }
 func (b *BaseSqlClause) GetSqlSetting() *DBCurrent {
 	return b.SqlSetting
@@ -484,27 +950,96 @@ func (b *BaseSqlClause) IsOrScopeQueryEffective() bool {
 }
 
 func (b *BaseSqlClause) IsOrScopeQueryAndPartEffective() bool {
-	return b.orScopeQueryAndPartEffective
+	return b.OrScopeQueryAndPartEffective
 }
 func (b *BaseSqlClause) RegisterWhereClause(crn *ColumnRealName, key *ConditionKey, cvalue *ConditionValue, co *ConditionOption, usedAliasName string) {
 	//Assert 省略
 	clauseList := b.GetWhereClauseList4Register()
 	b.DoRegisterWhereClause(clauseList, crn, key, cvalue, co, false, false)
 	cmap := cvalue.Fixed
-	log.InternalDebug(fmt.Sprint(" Sql Clause Cvalue %v cmap %v\n", cvalue, cmap))
-	//	        reflectWhereUsedToJoin(usedAliasName);
-	//        if (!ConditionKey.isNullaleConditionKey(key)) {
-	//            registerInnerJoinLazyReflector(usedAliasName);
-	//        }
+	log.InternalDebug(fmt.Sprintf(" Sql Clause Cvalue %v cmap %v usedAliasName %s\n", cvalue, cmap, usedAliasName))
+	b.ReflectWhereUsedToJoin(usedAliasName)
+	if !ConditionKey_IsNullaleConditionKey(key) {
+		b.RegisterInnerJoinLazyReflector(usedAliasName)
+	}
 }
-
+func (b *BaseSqlClause) IsOutOfWhereUsedInnerJoin() bool {
+	return !b.whereUsedInnerJoinAllowed || b.orScopeQueryEffective
+}
+func (b *BaseSqlClause) RegisterInnerJoinLazyReflector(usedAliasName string) {
+	if b.IsOutOfWhereUsedInnerJoin() {
+		return
+	}
+	usedAliasInfo := new(QueryUsedAliasInfo)
+	usedAliasInfo.usedAliasName = usedAliasName
+	b.RegisterInnerJoinLazyReflectorSub(usedAliasInfo)
+}
+func (b *BaseSqlClause) RegisterInnerJoinLazyReflectorSub(usedAliasInfo *QueryUsedAliasInfo) {
+	if b.IsOutOfWhereUsedInnerJoin() {
+		return
+	}
+	reflectorList := b.getInnerJoinLazyReflectorList()
+	reflectorList.Add(b.createInnerJoinLazyReflector(usedAliasInfo))
+}
+func (b *BaseSqlClause) createInnerJoinLazyReflector(usedAliasInfo *QueryUsedAliasInfo) *InnerJoinLazyReflector {
+	usedAliasName := usedAliasInfo.usedAliasName
+	innerJoinLazyReflectorBase := new(InnerJoinLazyReflectorBase)
+	innerJoinLazyReflectorBase.noWaySpeaker = usedAliasInfo.innerJoinNoWaySpeaker
+	innerJoinLazyReflectorBase.usedAliasName = usedAliasName
+	innerJoinLazyReflectorBase.BaseSqlClause = b
+	var ref InnerJoinLazyReflector = innerJoinLazyReflectorBase
+	return &ref
+}
+func (b *BaseSqlClause) DoChangeToInnerJoin(foreignAliasName string, autoDetect bool) {
+	outerJoinMap := b.outerJoinMap
+	joinInfo := outerJoinMap[foreignAliasName]
+	if joinInfo == nil {
+		panic("The foreignAliasName was not found:" + " " + foreignAliasName)
+	}
+	joinInfo.innerJoin = true
+	b.reflectUnderInnerJoinToJoin(joinInfo, autoDetect)
+}
+func (b *BaseSqlClause) reflectUnderInnerJoinToJoin(foreignJoinInfo *LeftOuterJoinInfo, autoDetect bool) {
+	currentJoinInfo := foreignJoinInfo.localJoinInfo
+	for true {
+		if currentJoinInfo == nil { // means base point
+			break
+		}
+		// all join-info are overridden because of complex logic
+		if autoDetect {
+			currentJoinInfo.innerJoin = true // be inner-join as we can if auto-detect
+		} else {
+			currentJoinInfo.underInnerJoin = true // manual is pinpoint setting
+		}
+		currentJoinInfo = currentJoinInfo.localJoinInfo
+	}
+}
+func (b *BaseSqlClause) getInnerJoinLazyReflectorList() *List {
+	if b.InnerJoinLazyReflector == nil {
+		b.InnerJoinLazyReflector = new(List)
+	}
+	return b.InnerJoinLazyReflector
+}
+func (b *BaseSqlClause) ReflectWhereUsedToJoin(usedAliasName string) {
+	currentJoinInfo := b.outerJoinMap[usedAliasName]
+	for true {
+		if currentJoinInfo == nil { // means base point
+			break
+		}
+		if currentJoinInfo.whereUsedJoin { // means already traced
+			break
+		}
+		currentJoinInfo.whereUsedJoin = true
+		currentJoinInfo = currentJoinInfo.localJoinInfo // trace back toward base point
+	}
+}
 func (b *BaseSqlClause) DoRegisterWhereClause(clauseList *List, crn *ColumnRealName, key *ConditionKey, cvalue *ConditionValue, co *ConditionOption, inline bool, onClause bool) {
 	(*key).AddWhereClause(key, b.XcreateQueryModeProvider(), clauseList, crn, cvalue, co)
 	//MarkOrScopeQueryAndPart(clauseList); 未実装
 }
 func (b *BaseSqlClause) XcreateQueryModeProvider() *QueryModeProvider {
 	qm := new(QueryModeProvider)
-	qm.IsInline = b.OrScopeQueryEffective
+	qm.SqlClause = b.sqlClause
 	qm.IsInline = b.Inline
 	qm.IsOnClause = b.OnClause
 	return qm
@@ -524,14 +1059,16 @@ func (b *BaseSqlClause) GetWhereList() *List {
 	b.WhereList = new(List)
 	return b.WhereList
 }
-type SqlClauseMySql struct {
-	BaseSqlClause
+func (b *BaseSqlClause) ResolveRelationNo(localTableName string, foreignPropertyName string) int {
+	dbmeta := DBMetaProvider_I.TableDbNameInstanceMap[localTableName]
+	foreignInfo := (*dbmeta).FindForeignInfo(foreignPropertyName)
+	return foreignInfo.RelationNo
 }
-type SqlClauseSqlServer struct {
-	BaseSqlClause
-}
-type SqlClausePostgres struct {
-	BaseSqlClause
+func (b *BaseSqlClause) ResolveJoinAliasName(relationPath string) string {
+	if b.subQueryLevel > 0 {
+		return "sub" + strconv.Itoa(b.subQueryLevel) + "rel" + relationPath
+	}
+	return "df" + "rel" + relationPath
 }
 
 func CreateSqlClause(cb ConditionBean, dc *DBCurrent) *SqlClause {
@@ -545,21 +1082,23 @@ func CreateSqlClauseSub(tableDbName string, dc *DBCurrent) *SqlClause {
 		sqlp := new(SqlClausePostgres)
 		sqlp.BasePorintAliasName = "dfloc"
 		sql = sqlp
+		sqlp.sqlClause = &sql
 	}
-		if code == "mysql" {
+	if code == "mysql" {
 		sqlp := new(SqlClauseMySql)
 		sqlp.BasePorintAliasName = "dfloc"
 		sql = sqlp
+		sqlp.sqlClause = &sql
 	}
-			if code == "sqlserver" {
+	if code == "sqlserver" {
 		sqlp := new(SqlClauseSqlServer)
 		sqlp.BasePorintAliasName = "dfloc"
 		sql = sqlp
+		sqlp.sqlClause = &sql
 	}
 	sql.setTableDbName(tableDbName)
 	sql.setSqlSetting(dc)
 	return &sql
-	return nil
 }
 
 type OrderByClause struct {
@@ -650,8 +1189,23 @@ func (o *OrScopeQueryInfo) addChildInfo(info *OrScopeQueryInfo) {
 
 type OrScopeQueryClauseListProvider interface {
 	provide(tmpOrScopeQueryInfo *OrScopeQueryInfo) interface{}
+	provideAlias(tmpOrScopeQueryInfo *OrScopeQueryInfo, aliasName string) interface{}
 }
+type BaseOrScopeQueryClauseListProvider struct {
+}
+func (p *BaseOrScopeQueryClauseListProvider) provide(
+	tmpOrScopeQueryInfo *OrScopeQueryInfo) interface{}{
+	//Dummy implementation
+	return nil		
+	}
+func (p *BaseOrScopeQueryClauseListProvider) provideAlias(
+	tmpOrScopeQueryInfo *OrScopeQueryInfo, aliasName string) interface{} {
+	//Dummy implementation
+	return nil
+}
+
 type OrScopeQueryClauseListProviderWhereList struct {
+	BaseOrScopeQueryClauseListProvider
 }
 
 func (o *OrScopeQueryClauseListProviderWhereList) provide(tmpOrScopeQueryInfo *OrScopeQueryInfo) interface{} {
@@ -660,24 +1214,30 @@ func (o *OrScopeQueryClauseListProviderWhereList) provide(tmpOrScopeQueryInfo *O
 }
 
 type OrScopeQueryClauseListProviderBaseTableInlineWhereList struct {
+	BaseOrScopeQueryClauseListProvider
 }
 
-func (o *OrScopeQueryClauseListProviderBaseTableInlineWhereList) provide(tmpOrScopeQueryInfo *OrScopeQueryInfo) interface{} {
+func (o *OrScopeQueryClauseListProviderBaseTableInlineWhereList) provide(
+	tmpOrScopeQueryInfo *OrScopeQueryInfo) interface{} {
 	return &tmpOrScopeQueryInfo.tmpOrBaseTableInlineWhereList
 }
 
 type OrScopeQueryClauseListProviderAdditionalOnClauseList struct {
+	BaseOrScopeQueryClauseListProvider
 }
 
-func (o *OrScopeQueryClauseListProviderAdditionalOnClauseList) provide(tmpOrScopeQueryInfo *OrScopeQueryInfo) interface{} {
-	return &tmpOrScopeQueryInfo.tmpOrAdditionalOnClauseListMap
+func (o *OrScopeQueryClauseListProviderAdditionalOnClauseList) provideAlias(
+	tmpOrScopeQueryInfo *OrScopeQueryInfo, aliasName string) interface{} {
+	return tmpOrScopeQueryInfo.tmpOrAdditionalOnClauseListMap[aliasName]
 }
 
 type OrScopeQueryClauseListProviderOuterJoinInlineClauseList struct {
+	BaseOrScopeQueryClauseListProvider
 }
 
-func (o *OrScopeQueryClauseListProviderOuterJoinInlineClauseList) provide(tmpOrScopeQueryInfo *OrScopeQueryInfo) interface{} {
-	return &tmpOrScopeQueryInfo.tmpOrOuterJoinInlineClauseListMap
+func (o *OrScopeQueryClauseListProviderOuterJoinInlineClauseList) provideAlias(
+	tmpOrScopeQueryInfo *OrScopeQueryInfo, aliasName string) interface{} {
+	return tmpOrScopeQueryInfo.tmpOrOuterJoinInlineClauseListMap[aliasName]
 }
 
 type OrScopeQueryReflector struct {
@@ -708,9 +1268,13 @@ func (o *OrScopeQueryReflector) reflectTmpOrClauseToRealObject(localInfo *OrScop
 		wl3 := new(OrScopeQueryClauseListProviderAdditionalOnClauseList)
 		var oc3 OrScopeQueryClauseListProvider = wl3
 		groupList2 := new(List)
-		temp2 := (o.setupTmpOrListList(localInfo, &oc3)).(map[string]*List)
-		for temp := range temp2 {
-			groupList2.Add(temp2[temp])
+		temp2 := (o.setupTmpOrListListAlias(localInfo, aliasName, &oc3)).(*List)
+		for _, temp := range temp2.data {
+			//fmt.Printf("groupList2 %v %T\n", temp, temp)
+			var tlist *OrScopeQueryClauseGroup = temp.(*OrScopeQueryClauseGroup)
+			if tlist.orClauseList != nil {
+				groupList2.Add(temp)
+			}
 		}
 
 		o.setupOrScopeQuery(groupList2, &joinInfo.additionalOnClauseList, false)
@@ -722,11 +1286,14 @@ func (o *OrScopeQueryReflector) reflectTmpOrClauseToRealObject(localInfo *OrScop
 		wl3 := new(OrScopeQueryClauseListProviderOuterJoinInlineClauseList)
 		var oc3 OrScopeQueryClauseListProvider = wl3
 		groupList2 := new(List)
-		temp2 := (o.setupTmpOrListList(localInfo, &oc3)).(map[string]*List)
-		for temp := range temp2 {
-			groupList2.Add(temp2[temp])
+		temp2 := (o.setupTmpOrListListAlias(localInfo,aliasName, &oc3)).(*List)
+		for _, temp := range temp2.data {
+			//fmt.Printf("groupList2 %v %T\n", temp, temp)
+			var tlist *OrScopeQueryClauseGroup = temp.(*OrScopeQueryClauseGroup)
+			if tlist.orClauseList != nil {
+				groupList2.Add(temp)
+			}
 		}
-
 		o.setupOrScopeQuery(groupList2, &joinInfo.additionalOnClauseList, false)
 	}
 }
@@ -742,6 +1309,24 @@ func (o *OrScopeQueryReflector) setupTmpOrListList(parentInfo *OrScopeQueryInfo,
 		for _, childInfo := range parentInfo.childInfoList.data {
 			var ci *OrScopeQueryInfo = childInfo.(*OrScopeQueryInfo)
 			list := (o.setupTmpOrListList(ci, provider)).(*List)
+			for _, ele := range list.data {
+				resultList.Add(ele)
+			}
+		}
+	}
+	return resultList
+}
+func (o *OrScopeQueryReflector) setupTmpOrListListAlias(
+	parentInfo *OrScopeQueryInfo, aliasName string,
+	provider *OrScopeQueryClauseListProvider) interface{} {
+	resultList := new(List)
+	groupInfo := new(OrScopeQueryClauseGroup)
+	groupInfo.orClauseList = (*provider).provideAlias(parentInfo, aliasName).(*List)
+	resultList.Add(groupInfo)
+	if parentInfo.childInfoList.Size() > 0 {
+		for _, childInfo := range parentInfo.childInfoList.data {
+			var ci *OrScopeQueryInfo = childInfo.(*OrScopeQueryInfo)
+			list := (o.setupTmpOrListListAlias(ci, aliasName, provider)).(*List)
 			for _, ele := range list.data {
 				resultList.Add(ele)
 			}
@@ -769,8 +1354,56 @@ type LeftOuterJoinInfo struct {
 	whereUsedJoin              bool
 }
 
-type FixedConditionResolver struct {
+func (p *LeftOuterJoinInfo) resolveFixedInlineView(foreignTableSqlName string, canBeInnerJoin bool) string {
+	if p.hasFixedCondition() && p.fixedConditionResolver != nil {
+		return (*p.fixedConditionResolver).ResolveFixedInlineView(foreignTableSqlName, canBeInnerJoin)
+	}
+	return foreignTableSqlName
 }
+func (p *LeftOuterJoinInfo) hasFixedCondition() bool {
+	return len(p.fixedCondition) > 0
+}
+func (p *LeftOuterJoinInfo) hasInlineOrOnClause() bool {
+	return p.inlineWhereClauseList.Size() > 0 || p.additionalOnClauseList.Size() > 0
+}
+func (p *LeftOuterJoinInfo) isPureStructuralPossibleInnerJoin() bool {
+	return !p.hasInlineOrOnClause() && p.pureFK && p.notNullFKColumn
+}
+func (p *LeftOuterJoinInfo) isStructuralPossibleInnerJoin() bool {
+	if !p.isPureStructuralPossibleInnerJoin() {
+		return false
+	}
+	// pure structural-possible inner-join here
+	// and check all relations from base point are inner-join or not
+	// (separated structural-possible should not be inner-join)
+	current := p.localJoinInfo
+	for true {
+		if current == nil { // means first level (not nested) join
+			break
+		}
+		// means nested join here
+		// (e.g. SERVICE_RANK if MEMBER is base point)
+		if !current.isTraceStructuralPossibleInnerJoin() {
+			return false
+		}
+		current = current.localJoinInfo
+	}
+	return true
+}
+func (p *LeftOuterJoinInfo) isTraceStructuralPossibleInnerJoin() bool {
+	return !p.hasInlineOrOnClause() && p.pureFK && p.notNullFKColumn
+}
+func (p *LeftOuterJoinInfo) ResolveFixedCondition() {
+	if p.fixedCondition > "" && p.fixedConditionResolver != nil {
+		// over-relation should be determined before resolving
+		p.fixedConditionOverRelation = (*p.fixedConditionResolver).HasOverRelation(p.fixedCondition)
+		p.fixedCondition = (*p.fixedConditionResolver).ResolveVariable(p.fixedCondition, false)
+	}
+}
+func (p *LeftOuterJoinInfo) IsCountableJoin() bool {
+	return p.innerJoin || p.underInnerJoin || p.whereUsedJoin
+}
+
 type OrScopeQuerySetupper struct {
 }
 
@@ -939,4 +1572,83 @@ type OrScopeQueryAndPartQueryClause struct {
 
 func (o *OrScopeQueryAndPartQueryClause) getIdentity() int {
 	return o.identity
+}
+
+type QueryUsedAliasInfo struct {
+	usedAliasName         string
+	innerJoinNoWaySpeaker *InnerJoinNoWaySpeaker
+}
+type InnerJoinNoWaySpeaker struct {
+}
+type InnerJoinLazyReflector interface {
+	Reflect()
+}
+type InnerJoinLazyReflectorBase struct {
+	noWaySpeaker  *InnerJoinNoWaySpeaker
+	usedAliasName string
+	BaseSqlClause *BaseSqlClause
+}
+
+func (p *InnerJoinLazyReflectorBase) Reflect() {
+	if p.BaseSqlClause.outerJoinMap[p.usedAliasName] != nil {
+		p.BaseSqlClause.DoChangeToInnerJoin(p.usedAliasName, true)
+	}
+}
+
+type SelectClauseType struct {
+	Value           int
+	count           bool
+	scalar          bool
+	uniqueScalar    bool
+	specifiedScalar bool
+}
+
+func Create_SelectClauseType(value int) *SelectClauseType {
+	var s *SelectClauseType = new(SelectClauseType)
+	s.Value = value
+	switch value {
+	case SelectClauseType_COLUMNS:
+	case SelectClauseType_UNIQUE_COUNT:
+		s.count = true
+		s.scalar = true
+	case SelectClauseType_PLAIN_COUNT:
+		s.count = true
+		s.scalar = true
+	case SelectClauseType_COUNT_DISTINCT:
+		s.scalar = true
+		s.uniqueScalar = true
+		s.specifiedScalar = true
+	case SelectClauseType_MAX:
+		s.scalar = true
+		s.uniqueScalar = true
+		s.specifiedScalar = true
+	case SelectClauseType_MIN:
+		s.scalar = true
+		s.uniqueScalar = true
+		s.specifiedScalar = true
+	case SelectClauseType_SUM:
+		s.scalar = true
+		s.uniqueScalar = true
+		s.specifiedScalar = true
+	case SelectClauseType_AVE:
+		s.scalar = true
+		s.uniqueScalar = true
+		s.specifiedScalar = true
+	}
+	return s
+}
+
+type SelectedRelationColumn struct {
+	tableAliasName  string
+	columnInfo      *ColumnInfo
+	columnAliasName string
+}
+
+func (p *SelectedRelationColumn) BuildRealColumnSqlName() string {
+	columnSqlName := p.columnInfo.ColumnSqlName
+	if p.tableAliasName != "" {
+		return p.tableAliasName + "." + columnSqlName.ColumnSqlName
+	} else {
+		return columnSqlName.ColumnSqlName
+	}
 }

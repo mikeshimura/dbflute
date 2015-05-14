@@ -115,6 +115,12 @@ func init() {
 	var CK_LEISN_ck ConditionKey = CK_LEISN
 	CK_LEISN.conditionKey = &CK_LEISN_ck
 	CK_LEISN_C =  &CK_LEISN_ck
+		CK_INS = new(CK_INS_T)
+	CK_INS.ConditionKeyS = C_INS
+	CK_INS.Operand = "in"
+	var CK_INS_ck ConditionKey = CK_INS
+	CK_INS.conditionKey = &CK_INS_ck
+	CK_INS_C =  &CK_INS_ck
 	LoopVariableType := new(LoopVariableType_T)
 	LoopVariableType.codeValueMap = make(map[string]*Node)
 	CreateDBMetaInstanceHandle()

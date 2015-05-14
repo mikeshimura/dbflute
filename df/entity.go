@@ -51,6 +51,7 @@ type Entity interface {
 
 type BaseEntity struct {
 	EntityModifiedProperties
+	EntityInt interface{}
 }
 
 func GetEntityValue(entity *Entity, property string) interface{} {
@@ -66,6 +67,12 @@ func SetEntityValue(entity *Entity, property string, value interface{}) bool {
 	m := v.MethodByName("Set" + InitCap(property))
 	if !m.IsValid() {
 		return false
+	}
+	stype := GetType(value)
+	//fmt.Printf("type %s\n", stype)
+	if stype[0:1] == "*" {
+		value =
+			reflect.ValueOf(value).Elem().Interface()
 	}
 	m.Call([]reflect.Value{reflect.ValueOf(value)})
 	return true
@@ -99,4 +106,3 @@ func (e *EntityModifiedProperties) IsModifiedProperty(property string) bool {
 func (e *EntityModifiedProperties) PropertyNameMapClear() {
 	e.propertyNameMap = make(map[string]bool)
 }
-

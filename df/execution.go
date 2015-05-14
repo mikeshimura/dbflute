@@ -33,12 +33,12 @@ const (
 )
 
 type SqlExecutionCreator interface {
-	CreateSqlExecution(cb interface{}, entity interface{}) (*SqlExecution, error)
+	CreateSqlExecution(cb interface{}, entity interface{}) *SqlExecution
 }
 
 type SqlExecution interface {
-	Execute(args []interface{}, tx *sql.Tx, behavior *Behavior) (interface{}, error)
-	GetRootNode(args []interface{}) (*Node, error)
+	Execute(args []interface{}, tx *sql.Tx, behavior *Behavior) interface{}
+	GetRootNode(args []interface{}) *Node
 	GetArgNames() []string
 	GetArgTypes() []string
 	filterExecutedSql(executedSql string) string
@@ -49,8 +49,8 @@ type TnDeleteEntityStaticCommand struct {
 	TnAbstractEntityStaticCommand
 }
 
-func (t *TnDeleteEntityStaticCommand) setupSql() error {
-	return t.setupDeleteSql()
+func (t *TnDeleteEntityStaticCommand) setupSql() {
+	t.setupDeleteSql()
 }
 
 type TnAbstractEntityStaticCommand struct {
@@ -63,7 +63,7 @@ type TnAbstractEntityStaticCommand struct {
 	sql                            string
 }
 
-func (t *TnAbstractEntityStaticCommand) Execute(args []interface{}, tx *sql.Tx, behavior *Behavior) (interface{}, error) {
+func (t *TnAbstractEntityStaticCommand) Execute(args []interface{}, tx *sql.Tx, behavior *Behavior) interface{} {
 	handler := new(TnDeleteEntityHandler)
 	handler.sql = t.sql
 	handler.statementFactory = t.StatementFactory
@@ -74,7 +74,7 @@ func (t *TnAbstractEntityStaticCommand) Execute(args []interface{}, tx *sql.Tx, 
 	return t.doExecute(&entity, handler, tx)
 }
 
-func (t *TnAbstractEntityStaticCommand) setupDeleteSql() error {
+func (t *TnAbstractEntityStaticCommand) setupDeleteSql() {
 	//	        checkPrimaryKey();
 	//        final StringBuilder sb = new StringBuilder(64);
 	//        sb.append("delete from ").append(_targetDBMeta.getTableSqlName());
@@ -85,7 +85,7 @@ func (t *TnAbstractEntityStaticCommand) setupDeleteSql() error {
 	t.setupDeleteWhere(sb)
 	t.sql = sb.String()
 	log.InternalDebug(t.sql)
-	return nil
+	return
 }
 func (t *TnAbstractEntityStaticCommand) setupDeleteWhere(sb *bytes.Buffer) {
 	//        final TnBeanMetaData bmd = _beanMetaData;
@@ -123,14 +123,14 @@ type TnInsertEntityDynamicCommand struct {
 	TnAbstractEntityDynamicCommand
 }
 
-func (t *TnAbstractEntityStaticCommand) doExecute(args *Entity, handler *TnDeleteEntityHandler, tx *sql.Tx) (int64, error) {
+func (t *TnAbstractEntityStaticCommand) doExecute(args *Entity, handler *TnDeleteEntityHandler, tx *sql.Tx) int64 {
 	//	        handler.setExceptionMessageSqlArgs(args);
 	//        final int rows = handler.execute(args);
 	//        return Integer.valueOf(rows);
 	return handler.execute(args, tx)
 }
 
-func (t *TnInsertEntityDynamicCommand) Execute(args []interface{}, tx *sql.Tx, behavior *Behavior) (interface{}, error) {
+func (t *TnInsertEntityDynamicCommand) Execute(args []interface{}, tx *sql.Tx, behavior *Behavior) interface{} {
 	//fmt.Printf("args0 %v %T \n", args[0], args[0])
 	//	        if (args == null || args.length == 0) {
 	//            String msg = "The argument 'args' should not be null or empty.";
@@ -155,7 +155,7 @@ func (t *TnInsertEntityDynamicCommand) Execute(args []interface{}, tx *sql.Tx, b
 	return t.doExecute(entity, propertyTypes, fsql, option, tx)
 }
 
-func (t *TnInsertEntityDynamicCommand) doExecute(entity *Entity, propertyTypes *List, sql string, option *InsertOption, tx *sql.Tx) (int64, error) {
+func (t *TnInsertEntityDynamicCommand) doExecute(entity *Entity, propertyTypes *List, sql string, option *InsertOption, tx *sql.Tx) int64 {
 	//	        final TnInsertEntityHandler handler = createInsertEntityHandler(propertyTypes, sql, option);
 	//        final Object[] realArgs = new Object[] { bean };
 	//        handler.setExceptionMessageSqlArgs(realArgs);
@@ -314,6 +314,7 @@ func (s *SelectCBExecution) newBasicParameterHandler(executedSql string) *Parame
 	handler.sql = executedSql
 	handler.statementFactory = s.StatementFactory
 	handler.ResultType = s.ResultType
+	handler.SqlClause=s.rc.SqlClause
 	var hand ParameterHandler = handler
 	return &hand
 }
@@ -323,10 +324,10 @@ func (s *SelectCBExecution) filterExecutedSql(executedSql string) string {
 	//CallbackContext.isExistSqlStringFilterOnThread()
 	return executedSql
 }
-func (s *SelectCBExecution) GetRootNode(args []interface{}) (*Node, error) {
+func (s *SelectCBExecution) GetRootNode(args []interface{}) *Node {
 	sql := s.ExtractTwoWaySql(args)
-	node, err := s.AnalyzeTwoWaySql(sql)
-	return node, err
+	node := s.AnalyzeTwoWaySql(sql)
+	return node
 }
 func (s *SelectCBExecution) ExtractTwoWaySql(args []interface{}) string {
 	//        assertArgsValid(args);
@@ -338,7 +339,9 @@ func (s *SelectCBExecution) ExtractTwoWaySql(args []interface{}) string {
 	//	fmt.Printf("args %v \n",args[0])
 	cb := args[0]
 	cbbase := reflect.ValueOf(cb).Elem().FieldByName("BaseConditionBean").Interface()
+	
 	cbir := reflect.ValueOf(cbbase).MethodByName("GetSqlClause").Call([]reflect.Value{})
+	s.rc.SqlClause=cbir[0].Elem().Interface()
 	sqlcr := cbir[0].Elem().MethodByName("GetClause").Call([]reflect.Value{})
 	//return (*(*cb).GetSqlClause()).GetClause()
 	return sqlcr[0].String()
@@ -351,8 +354,8 @@ type TnAbstractBasicSqlCommand struct {
 	ResultType       string
 }
 
-func (t *TnAbstractBasicSqlCommand) GetRootNode(args []interface{}) (*Node, error) {
-	return nil, nil
+func (t *TnAbstractBasicSqlCommand) GetRootNode(args []interface{}) *Node {
+	return nil
 }
 func (t *TnAbstractBasicSqlCommand) GetArgNames() []string {
 	return nil
@@ -372,18 +375,12 @@ type TnAbstractTwoWaySqlCommand struct {
 	IsBlockeNullParameter bool //defult true
 }
 
-func (t *TnAbstractTwoWaySqlCommand) Execute(args []interface{}, tx *sql.Tx, behavior *Behavior) (interface{}, error) {
+func (t *TnAbstractTwoWaySqlCommand) Execute(args []interface{}, tx *sql.Tx, behavior *Behavior) interface{} {
 	log.InternalDebug("TnAbstractTwoWaySqlCommand Execute")
 	//Current
 	//	        final Node rootNode = getRootNode(args);
-	rootNode, err := (*t.sqlExecution).GetRootNode(args)
-	if err != nil {
-		return nil, err
-	}
-	ctx, err1 := t.apply(rootNode, args, (*t.sqlExecution).GetArgNames(), (*t.sqlExecution).GetArgTypes())
-	if err1 != nil {
-		return nil, err1
-	}
+	rootNode := (*t.sqlExecution).GetRootNode(args)
+	ctx := t.apply(rootNode, args, (*t.sqlExecution).GetArgNames(), (*t.sqlExecution).GetArgTypes())
 	log.InternalDebug("ctx Sql :" + (*ctx).getSql())
 	executedSql := (*t.sqlExecution).filterExecutedSql((*ctx).getSql())
 	log.InternalDebug("executedSql :" + executedSql)
@@ -396,11 +393,10 @@ func (t *TnAbstractTwoWaySqlCommand) Execute(args []interface{}, tx *sql.Tx, beh
 	bindVariables = bindVariables
 	bindVariableTypes = bindVariableTypes
 
-	rtn, err := (*handler).execute(bindVariables, bindVariableTypes, tx, behavior)
-	rtn = rtn
+	rtn := (*handler).execute(bindVariables, bindVariableTypes, tx, behavior)
 	//        return filterReturnValue(handler.execute(bindVariables, bindVariableTypes));
 
-	return rtn, err
+	return rtn
 }
 func (t *TnAbstractTwoWaySqlCommand) createBasicParameterHandler(ctx *CommandContext, executedSql string) *ParameterHandler {
 	handler := (*t.sqlExecution).newBasicParameterHandler(executedSql)
@@ -409,17 +405,14 @@ func (t *TnAbstractTwoWaySqlCommand) createBasicParameterHandler(ctx *CommandCon
 	return handler
 }
 
-func (t *TnAbstractTwoWaySqlCommand) apply(rootNode *Node, args []interface{}, argNames []string, argTypes []string) (*CommandContext, error) {
+func (t *TnAbstractTwoWaySqlCommand) apply(rootNode *Node, args []interface{}, argNames []string, argTypes []string) *CommandContext {
 	log.InternalDebug("TnAbstractTwoWaySqlCommand apply")
 	log.InternalDebug(fmt.Sprintf("argNames %v argtypes %v \n", argNames, argTypes))
 	//fmt.Printf("rootNode %v  \n", rootNode)
 	ctx := t.createCommandContext(args, argNames, argTypes)
-	err := (*rootNode).accept(ctx, rootNode)
-	if err != nil {
-		return nil, err
-	}
+	(*rootNode).accept(ctx, rootNode)
 	//fmt.Println("sql apply %s"+(*ctx).getSql())
-	return ctx, nil
+	return ctx
 }
 func (t *TnAbstractTwoWaySqlCommand) createCommandContext(args []interface{}, argNames []string, argTypes []string) *CommandContext {
 	cr := new(CommandContextCreator)
@@ -428,7 +421,7 @@ func (t *TnAbstractTwoWaySqlCommand) createCommandContext(args []interface{}, ar
 	cc := cr.createCommandContext(args)
 	return cc
 }
-func (t *TnAbstractTwoWaySqlCommand) AnalyzeTwoWaySql(twoWaySql string) (*Node, error) {
+func (t *TnAbstractTwoWaySqlCommand) AnalyzeTwoWaySql(twoWaySql string) *Node {
 	sqlAnalyzer := t.CreateSqlAnalyzer(twoWaySql)
 	return sqlAnalyzer.Analyze()
 }
@@ -462,9 +455,9 @@ type TnUpdateEntityDynamicCommand struct {
 	versionNoAutoIncrementOnMemory bool
 }
 
-func (t *TnUpdateEntityDynamicCommand) Execute(args []interface{}, tx *sql.Tx, behavior *Behavior) (interface{}, error) {
+func (t *TnUpdateEntityDynamicCommand) Execute(args []interface{}, tx *sql.Tx, behavior *Behavior) interface{} {
 	if args == nil || len(args) == 0 {
-		return nil, errors.New("The argument 'args' should not be null or empty.")
+		panic("The argument 'args' should not be null or empty.")
 	}
 	bean := args[0]
 	var option *UpdateOption = (args[1]).(*UpdateOption)
@@ -482,25 +475,21 @@ func (t *TnUpdateEntityDynamicCommand) Execute(args []interface{}, tx *sql.Tx, b
 		//            }
 		//            return getNonUpdateReturn();
 		//        }
-		return 1, nil
+		return 1
 	}
-	sql, err2 := t.createUpdateSql(propertyTypes, option)
-	if err2 != nil {
-		return 0, nil
-	}
+	sql := t.createUpdateSql(propertyTypes, option)
 	log.InternalDebug(fmt.Sprintln("sql :" + sql))
 	sql2 := t.filterExecutedSql(sql)
-	sql2 = sql2
 	return t.doExecute(entity, propertyTypes, sql2, option, tx)
 }
-func (t *TnUpdateEntityDynamicCommand) doExecute(entity *Entity, propertyTypes *List, sql string, option *UpdateOption, tx *sql.Tx) (int64, error) {
+func (t *TnUpdateEntityDynamicCommand) doExecute(entity *Entity, propertyTypes *List, sql string, option *UpdateOption, tx *sql.Tx) int64 {
 	handler := t.createUpdateEntityHandler(propertyTypes, sql, option)
 	//        final Object[] realArgs = new Object[] { bean };
 	//        handler.setExceptionMessageSqlArgs(realArgs);
 	//        final int result = handler.execute(realArgs);
-	res, err := handler.execute(entity, tx)
+	res := handler.execute(entity, tx)
 	//        return Integer.valueOf(result);
-	return res, err
+	return res
 }
 
 func (t *TnUpdateEntityDynamicCommand) createUpdateEntityHandler(propertyTypes *List, sql string, option *UpdateOption) *TnUpdateEntityHandler {
@@ -519,11 +508,11 @@ func (t *TnUpdateEntityDynamicCommand) createUpdateEntityHandler(propertyTypes *
 func (t *TnUpdateEntityDynamicCommand) filterExecutedSql(sql string) string {
 	return sql
 }
-func (t *TnUpdateEntityDynamicCommand) createUpdateSql(propertyTypes *List, option *UpdateOption) (string, error) {
+func (t *TnUpdateEntityDynamicCommand) createUpdateSql(propertyTypes *List, option *UpdateOption) string {
 	tableDbName := (*t.targetDBMeta).GetTableDbName()
 	//_beanMetaDataとtargetDBMetaの区別不明 要確認
 	if (*t.targetDBMeta).HasPrimaryKey() == false {
-		return "", errors.New("The table '" + tableDbName + "' should have primary key.")
+		panic("The table '" + tableDbName + "' should have primary key.")
 	}
 	sb := new(bytes.Buffer)
 	sb.WriteString("update " + (*t.targetDBMeta).GetTableSqlName().TableSqlName + " set ")
@@ -583,7 +572,7 @@ func (t *TnUpdateEntityDynamicCommand) createUpdateSql(propertyTypes *List, opti
 	//            sb.append(" and ").append(pt.getColumnSqlName()).append(" = ?");
 	//        }
 
-	return sb.String(), nil
+	return sb.String()
 }
 func (t *TnUpdateEntityDynamicCommand) setupVersionNoAutoIncrementOnQuery(sb *bytes.Buffer, columnSqlName *ColumnSqlName) {
 	sb.WriteString(columnSqlName.ColumnSqlName + " = " + columnSqlName.ColumnSqlName + " + 1")
@@ -655,23 +644,23 @@ type OutsideSqlBasicExecutor struct {
 	behavior                 *Behavior
 }
 
-func (o *OutsideSqlBasicExecutor) Execute(pmb interface{}, tx *sql.Tx) (int64, error) {
-
+func (o *OutsideSqlBasicExecutor) Execute(pmb interface{}, tx *sql.Tx) (res int64, errrtn error) {
+	var err error
+	defer func() {
+		errx := recover()
+		if errx != nil {
+			errrtn = errors.New(errx.(string))
+		}
+	}()
 	path := reflect.ValueOf(pmb).MethodByName("GetOutsideSqlPath").Call([]reflect.Value{})[0].Interface().(string)
-	return o.doExecute(path, pmb, tx)
+	return o.doExecute(path, pmb, tx), err
 }
-func (o *OutsideSqlBasicExecutor) doExecute(path string, pmb interface{}, tx *sql.Tx) (int64, error) {
-	fullpath, err1 := o.getFullPath(path)
-	if err1 != nil {
-		return 0, err1
-	}
+func (o *OutsideSqlBasicExecutor) doExecute(path string, pmb interface{}, tx *sql.Tx) int64 {
+	fullpath := o.getFullPath(path)
 	cmd := o.createExecuteCommand(fullpath, pmb, tx)
-	res, err := o.behaviorCommandInvoker.Invoke(cmd)
-	if err !=nil{
-		return 0,err
-	}
+	res := o.behaviorCommandInvoker.Invoke(cmd)
 	var lres int64 = res.(int64)
-	return lres, err
+	return lres
 }
 func (o *OutsideSqlBasicExecutor) createExecuteCommand(path string, pmb interface{}, tx *sql.Tx) *BehaviorCommand {
 	cmd := new(OutsideSqlExecuteCommand)
@@ -689,29 +678,33 @@ func (o *OutsideSqlBasicExecutor) createExecuteCommand(path string, pmb interfac
 	//        return cmd;
 	return &behaviorCommand
 }
-func (o *OutsideSqlBasicExecutor) SelectList(pmb interface{}, tx *sql.Tx) (*ListResultBean, error) {
+func (o *OutsideSqlBasicExecutor) SelectList(pmb interface{}, tx *sql.Tx) (bean *ListResultBean, errrtn error) {
+	var err error
+	defer func() {
+		errx := recover()
+		if errx != nil {
+			errrtn = errors.New(errx.(string))
+		}
+	}()
 	if pmb == nil {
 		return nil, errors.New("The argument 'pmb' (typed parameter-bean) should not be null.")
 	}
 	path := reflect.ValueOf(pmb).MethodByName("GetOutsideSqlPath").Call([]reflect.Value{})[0].Interface().(string)
 	entityType := reflect.ValueOf(pmb).MethodByName("GetEntityType").Call([]reflect.Value{})[0].Interface().(string)
-	return o.doSelectList(path, pmb, entityType, tx)
+	return o.doSelectList(path, pmb, entityType, tx), err
 }
-func (o *OutsideSqlBasicExecutor) getFullPath(path string) (string, error) {
+func (o *OutsideSqlBasicExecutor) getFullPath(path string) string {
 	fullpath := filepath.Join(Gopath, "src", path)
 	files, _ := filepath.Glob(fullpath)
 	//	fmt.Printf("files %v %T %d\n",files,files,len(files))
 	if len(files) == 0 {
-		return "", errors.New("SQL File Not found. GOPATH NOT SET? " + fullpath)
+		panic("SQL File Not found. GOPATH NOT SET? " + fullpath)
 	}
-	return fullpath, nil
+	return fullpath
 }
-func (o *OutsideSqlBasicExecutor) doSelectList(path string, pmb interface{}, entityType string, tx *sql.Tx) (*ListResultBean, error) {
+func (o *OutsideSqlBasicExecutor) doSelectList(path string, pmb interface{}, entityType string, tx *sql.Tx) *ListResultBean {
 	//////////
-	fullpath, err1 := o.getFullPath(path)
-	if err1 != nil {
-		return nil, err1
-	}
+	fullpath := o.getFullPath(path)
 	//	fmt.Println("PATH :"+Gopath+"/src/"+path)
 
 	//        if (entityType == null) {
@@ -726,12 +719,9 @@ func (o *OutsideSqlBasicExecutor) doSelectList(path string, pmb interface{}, ent
 	//            return null; // unreachable
 	//        }
 	cmd := o.createSelectListCommand(fullpath, pmb, entityType, tx)
-	res, err := o.behaviorCommandInvoker.Invoke(cmd)
-	if err != nil {
-		return nil, err
-	}
+	res := o.behaviorCommandInvoker.Invoke(cmd)
 	var lres *ListResultBean = res.(*ListResultBean)
-	return lres, nil
+	return lres
 }
 func (o *OutsideSqlBasicExecutor) createSelectListCommand(path string, pmb interface{}, entityType string, tx *sql.Tx) *BehaviorCommand {
 	cmd := new(OutsideSqlSelectListCommand)
@@ -871,8 +861,8 @@ type AbstractFixedSqlExecution struct {
 	rootNode *Node
 }
 
-func (a *AbstractFixedSqlExecution) GetRootNode(args []interface{}) (*Node, error) {
-	return a.rootNode, nil
+func (a *AbstractFixedSqlExecution) GetRootNode(args []interface{}) *Node {
+	return a.rootNode
 }
 
 // DefaultOutsideSqlContextFactory

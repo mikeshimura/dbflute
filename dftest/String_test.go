@@ -17,9 +17,11 @@ package dftest
 
 import (
 "testing"
-//	"github.com/mikeshimura/dbflute/df"
+	"github.com/mikeshimura/dbflute/df"
+	"fmt"
 )
 
 func TestString(t *testing.T) {
-
+	c:=df.StringCount("_A_BB","_")
+	fmt.Println(c)
 }

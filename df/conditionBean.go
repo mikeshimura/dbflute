@@ -16,7 +16,7 @@
 package df
 
 import (
-	//"github.com/mikeshimura/dbflute/log"
+//"github.com/mikeshimura/dbflute/log"
 )
 
 type Purpose int
@@ -29,26 +29,39 @@ const (
 
 type ConditionBean interface {
 	//AsTableDbName() string
-//	GetName() string
+	//	GetName() string
 	GetBaseConditionBean() *BaseConditionBean
 }
 type BaseConditionBean struct {
-	TableDbName string
-	Purpose     Purpose
+	TableDbName    string
+	Purpose        Purpose
 	DBMetaProvider *DBMetaProvider
-	SqlClause *SqlClause
-	Name string
+	SqlClause      *SqlClause
+	Name           string
 }
-func (b *BaseConditionBean) AllowEmptyStringQuery(){
+
+func (b *BaseConditionBean) AllowEmptyStringQuery() {
 	(*b.SqlClause).AllowEmptyStringQuery()
 }
-func (b *BaseConditionBean) GetName() string{
+func (b *BaseConditionBean) GetName() string {
 	return b.Name
 }
 func (b *BaseConditionBean) AsTableDbName() string {
 	return b.TableDbName
 }
-func (b *BaseConditionBean) GetSqlClause() *SqlClause{
+func (b *BaseConditionBean) GetSqlClause() *SqlClause {
 	return b.SqlClause
 }
-
+func (b *BaseConditionBean) SelectHint() string{
+	return (*b.GetSqlClause()).CreateSelectHint()
+}
+func (b *BaseConditionBean) DoSetupSelect(queryLocal *BaseConditionQuery,
+	queryRemote *BaseConditionQuery) {
+	foreignPropertyName := queryRemote.ForeignPropertyName
+	foreignTableAliasName := queryRemote.AliasName
+	localRelationPath := queryLocal.RelationPath
+	foreignRelationPath := queryRemote.RelationPath
+	localPropertyName:=queryLocal.TableDbName
+	(*b.SqlClause).RegisterSelectedRelation(foreignTableAliasName, localPropertyName, foreignPropertyName,
+		localRelationPath, foreignRelationPath,queryRemote.TableDbName)
+}

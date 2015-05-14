@@ -58,6 +58,7 @@ func (e *EmbeddingProcessor) Embed(sql string, args *List) string {
 		return sql
 	}
 	sb := new(bytes.Buffer)
+	sb.WriteString(Ln)
 	for {
 		e.questionMarkIndex = IndexAfter(sql, "?", e.processPointer)
 		//next line actually do nothing
@@ -165,6 +166,9 @@ func InterfaceToStringQuote(arg interface{}) string {
 		return Quote(arg.(string))
 	case *string:
 		return Quote(*arg.(*string))
+	case int:
+		intv := arg.(int)
+		return strconv.Itoa(intv)
 	case int64:
 		int64v := arg.(int64)
 		return strconv.Itoa(int(int64v))
@@ -174,6 +178,9 @@ func InterfaceToStringQuote(arg interface{}) string {
 	case float64:
 		float64v := arg.(float64)
 		return strconv.FormatFloat(float64v, 'f', -1, 64)
+	case float32:
+		floatv := arg.(float32)
+		return strconv.FormatFloat(float64(floatv), 'f', -1, 64)
 	case *float64:
 		float64v := arg.(*float64)
 		return strconv.FormatFloat(*float64v, 'f', -1, 64)
@@ -237,18 +244,18 @@ func InterfaceToStringQuote(arg interface{}) string {
 			return Quote((*nsv).String)
 		}
 		return "null"
-	case NullString:
-		nsv := arg.(NullString)
-		if nsv.Valid {
-			return Quote(nsv.String)
-		}
-		return "null"
-	case *NullString:
-		nsv := arg.(*NullString)
-		if nsv.Valid {
-			return Quote((*nsv).String)
-		}
-		return "null"
+		//	case NullString:
+		//		nsv := arg.(NullString)
+		//		if nsv.Valid {
+		//			return Quote(nsv.String)
+		//		}
+		//		return "null"
+		//	case *NullString:
+		//		nsv := arg.(*NullString)
+		//		if nsv.Valid {
+		//			return Quote((*nsv).String)
+		//		}
+		//		return "null"
 	case pq.NullTime:
 		ntv := arg.(pq.NullTime)
 		if ntv.Valid {
@@ -389,12 +396,12 @@ func IsNotNull(arg interface{}) bool {
 	case *sql.NullString:
 		nsv := arg.(*sql.NullString)
 		return nsv.Valid
-	case NullString:
-		nsv := arg.(NullString)
-		return nsv.Valid
-	case *NullString:
-		nsv := arg.(*NullString)
-		return nsv.Valid
+		//	case NullString:
+		//		nsv := arg.(NullString)
+		//		return nsv.Valid
+		//	case *NullString:
+		//		nsv := arg.(*NullString)
+		//		return nsv.Valid
 	case pq.NullTime:
 		ntv := arg.(pq.NullTime)
 		return ntv.Valid
@@ -538,18 +545,18 @@ func InterfaceToString(arg interface{}) string {
 			return (*nsv).String
 		}
 		return "null"
-	case NullString:
-		nsv := arg.(NullString)
-		if nsv.Valid {
-			return nsv.String
-		}
-		return "null"
-	case *NullString:
-		nsv := arg.(*NullString)
-		if nsv.Valid {
-			return (*nsv).String
-		}
-		return "null"
+		//	case NullString:
+		//		nsv := arg.(NullString)
+		//		if nsv.Valid {
+		//			return nsv.String
+		//		}
+		//		return "null"
+		//	case *NullString:
+		//		nsv := arg.(*NullString)
+		//		if nsv.Valid {
+		//			return (*nsv).String
+		//		}
+		//		return "null"
 	case pq.NullTime:
 		ntv := arg.(pq.NullTime)
 		if ntv.Valid {
@@ -712,12 +719,21 @@ func (b *BehaviorResultBuilder) doBuildResultExp(elapse time.Duration, entityTyp
 	log.InternalDebug("entity Type:" + entityType)
 	if stype == "*df.ListResultBean" {
 		var lrb *ListResultBean = ret.(*ListResultBean)
-		if lrb.AllRecordCount == 0 {
-			resultExp = prefix + "(0)]"
-		} else if lrb.AllRecordCount == 1 {
-			resultExp = prefix + "(1) result=" + b.buildEntityExp(lrb.List.Get(0), entityType) + "]"
+		if entityType == "D_Int64" {
+			if lrb.AllRecordCount == 0 {
+				resultExp = prefix + "(0)]"
+			} else if lrb.AllRecordCount == 1 {
+				var cnt int = int((lrb.List.Get(0)).(*D_Int64).GetValue())
+				resultExp = prefix + "result=" + strconv.Itoa(cnt) + "]"
+			}
 		} else {
-			resultExp = prefix + "(" + strconv.Itoa(lrb.AllRecordCount) + ") first=" + b.buildEntityExp(lrb.List.Get(0), entityType) + "]"
+			if lrb.AllRecordCount == 0 {
+				resultExp = prefix + "(0)]"
+			} else if lrb.AllRecordCount == 1 {
+				resultExp = prefix + "(1) result=" + b.buildEntityExp(lrb.List.Get(0), entityType) + "]"
+			} else {
+				resultExp = prefix + "(" + strconv.Itoa(lrb.AllRecordCount) + ") first=" + b.buildEntityExp(lrb.List.Get(0), entityType) + "]"
+			}
 		}
 
 	}

@@ -37,7 +37,7 @@ type CommandContext interface {
 	isBeginChild() bool
 	getArg(name string) interface{}
 	isAlreadySkippedConnector() bool
-	setAlreadySkippedConnector (value bool)
+	setAlreadySkippedConnector(value bool)
 }
 
 type CommandContextCreator struct {
@@ -83,11 +83,12 @@ type CommandContextImpl struct {
 	beginChild              bool
 	alreadySkippedConnector bool
 }
-func (c *CommandContextImpl) setAlreadySkippedConnector (value bool){
-	c.alreadySkippedConnector=value
+
+func (c *CommandContextImpl) setAlreadySkippedConnector(value bool) {
+	c.alreadySkippedConnector = value
 }
 
-func (c *CommandContextImpl) isAlreadySkippedConnector() bool{
+func (c *CommandContextImpl) isAlreadySkippedConnector() bool {
 	return c.alreadySkippedConnector
 }
 func (c *CommandContextImpl) isBeginChild() bool {
@@ -170,4 +171,20 @@ func (c *CommandContextImpl) getArg(name string) interface{} {
 		}
 		return nil
 	}
+}
+
+type Context struct {
+	cmap map[string]interface{}
+}
+
+func CreateContext() *Context {
+	ctx := new(Context)
+	ctx.cmap = make(map[string]interface{})
+	return ctx
+}
+func (p *Context) Put(key string, value interface{}) {
+	p.cmap[key] = value
+}
+func (p *Context) Get(key string) interface{} {
+	return p.cmap[key]
 }

@@ -17,7 +17,7 @@ package df
 
 import (
 	"bytes"
-	"errors"
+	//"errors"
 	"fmt"
 	"github.com/mikeshimura/dbflute/log"
 	"reflect"
@@ -34,9 +34,9 @@ type Node interface {
 	AddChild(node interface{})
 	GetChildSize() int
 	GetChild(i int) *Node
-	accept(ctx *CommandContext, node *Node) error
+	accept(ctx *CommandContext, node *Node) 
 	getCommentType() *CommentType
-	doProcess(ctx *CommandContext, valueAndType *ValueAndType, loopInfo *LoopInfo) error
+	doProcess(ctx *CommandContext, valueAndType *ValueAndType, loopInfo *LoopInfo) 
 	stype() string
 	isImplementedSqlConnectorAdjustable() bool
 	getOrgAddress() interface{}
@@ -49,19 +49,16 @@ type RootNode struct {
 func (r *RootNode) stype() string {
 	return "RootNode"
 }
-func (r *RootNode) accept(ctx *CommandContext, node *Node) error {
+func (r *RootNode) accept(ctx *CommandContext, node *Node)  {
 	for i := 0; i < r.GetChildSize(); i++ {
 		inter := r.GetChild(i)
 		//var node Node = *inter.(*Node)
 		stype := GetType(*inter)
 		log.InternalDebug(fmt.Sprintln("accept node type :" + stype))
 		//node.accept(ctx)
-		err := (*inter).accept(ctx, inter)
-		if err != nil {
-			return err
-		}
+		(*inter).accept(ctx, inter)
 	}
-	return nil
+	return
 }
 
 type SqlPartsNode struct {
@@ -73,7 +70,7 @@ type SqlPartsNode struct {
 func (r *SqlPartsNode) stype() string {
 	return "SqlPartsNode"
 }
-func (r *SqlPartsNode) accept(ctx *CommandContext, node *Node) error {
+func (r *SqlPartsNode) accept(ctx *CommandContext, node *Node)  {
 	log.InternalDebug("SqlPartsNode accept")
 	(*ctx).addSql(r.sqlParts)
 	log.InternalDebug("SQL PART*" + r.sqlParts)
@@ -82,7 +79,7 @@ func (r *SqlPartsNode) accept(ctx *CommandContext, node *Node) error {
 	//            // It does not skipped actually but it has not already needed to skip.
 	//            ctx.setAlreadySkippedConnector(true);
 	//        }
-	return nil
+	return
 }
 
 type ScopeNode struct {
@@ -92,12 +89,12 @@ type ScopeNode struct {
 func (r *ScopeNode) stype() string {
 	return "ScopeNode"
 }
-func (r *ScopeNode) processAcceptingChildren(ctx *CommandContext, loopInfo *LoopInfo) error {
+func (r *ScopeNode) processAcceptingChildren(ctx *CommandContext, loopInfo *LoopInfo) {
 	childSize := r.GetChildSize()
 	for i := 0; i < childSize; i++ {
 		child := r.GetChild(i)
 		if loopInfo != nil { // in loop
-			panic("")
+			panic("processAcceptingChildren")
 			//                if (child instanceof LoopAcceptable) { // accepting loop
 			//                    handleLoopElementNullParameter(child, loopInfo);
 			//                    ((LoopAcceptable) child).accept(ctx, loopInfo);
@@ -108,7 +105,7 @@ func (r *ScopeNode) processAcceptingChildren(ctx *CommandContext, loopInfo *Loop
 			(*child).accept(ctx, child)
 		}
 	}
-	return nil
+	return
 }
 
 type VariableNode struct {
@@ -144,20 +141,20 @@ func (r *VariableNode) SetupVariable(expression string, testValue string, specif
 	r.blockNullParameter = blockNullParameter
 	r.nameList = splitList(expression, ".")
 }
-func (r *VariableNode) accept(ctx *CommandContext, node *Node) error {
-	return r.doAccept(ctx, nil, node)
+func (r *VariableNode) accept(ctx *CommandContext, node *Node)  {
+	r.doAccept(ctx, nil, node)
 }
-func (r *VariableNode) doAccept(ctx *CommandContext, loopInfo *LoopInfo, node *Node) error {
+func (r *VariableNode) doAccept(ctx *CommandContext, loopInfo *LoopInfo, node *Node)  {
 	firstName := r.nameList.Get(0)
 	//未実装
 	//assertFirstNameAsNormal(ctx, firstName);
 
 	var firstValue interface{} = (*ctx).GetArgs()[firstName]
 	firstType := (*ctx).GetArgTypes()[firstName]
-	err := r.doAcceptSub(ctx, firstValue, firstType, loopInfo, false, node)
-	return err
+	r.doAcceptSub(ctx, firstValue, firstType, loopInfo, false, node)
+	return
 }
-func (r *VariableNode) doAcceptSub(ctx *CommandContext, firstValue interface{}, firstType string, loopInfo *LoopInfo, inheritLoop bool, node *Node) error {
+func (r *VariableNode) doAcceptSub(ctx *CommandContext, firstValue interface{}, firstType string, loopInfo *LoopInfo, inheritLoop bool, node *Node) {
 	//        assertInLoopOnlyOptionInLoop(loopInfo);
 	valueAndType := new(ValueAndType)
 	valueAndType.firstValue = firstValue
@@ -168,13 +165,10 @@ func (r *VariableNode) doAcceptSub(ctx *CommandContext, firstValue interface{}, 
 	//        processLikeSearch(valueAndType, loopInfo, inheritLoop);
 	log.InternalDebug(fmt.Sprintf("blockNullParameter %v \n ", r.blockNullParameter))
 	if r.blockNullParameter && IsNotNull(valueAndType.targetValue) == false {
-		return errors.New("The value of bind variable was null.")
+		panic("The value of bind variable was null.")
 	}
-	err := (*node).doProcess(ctx, valueAndType, loopInfo)
-	if err != nil {
-		return err
-	}
-	return nil
+	(*node).doProcess(ctx, valueAndType, loopInfo)
+	return
 }
 
 func (r *VariableNode) setupValueAndType(valueAndType *ValueAndType, node *Node) {
@@ -189,7 +183,8 @@ type BeginNode struct {
 	ScopeNode
 	nested bool
 }
-func (b *BeginNode) isNested() bool{
+
+func (b *BeginNode) isNested() bool {
 	return b.nested
 }
 func (b *BeginNode) isImplementedSqlConnectorAdjustable() bool {
@@ -198,25 +193,22 @@ func (b *BeginNode) isImplementedSqlConnectorAdjustable() bool {
 func (r *BeginNode) stype() string {
 	return "BeginNode"
 }
-func (r *BeginNode) accept(ctx *CommandContext, node *Node) error {
-	return r.doAccept(ctx, nil)
+func (r *BeginNode) accept(ctx *CommandContext, node *Node) {
+	r.doAccept(ctx, nil)
 }
-func (r *BeginNode) doAccept(ctx *CommandContext, loopInfo *LoopInfo) error {
+func (r *BeginNode) doAccept(ctx *CommandContext, loopInfo *LoopInfo)  {
 	childCtx := new(CommandContextImpl)
 	childCtx.parent = ctx
 	childCtx.beginChild = true
 	var child CommandContext = childCtx
-	err := r.processAcceptingChildren(&child, loopInfo)
-	if err != nil {
-		return err
-	}
+	r.processAcceptingChildren(&child, loopInfo)
 	if child.isEnabled() {
 		(*ctx).addSqlBind(child.getSql(), child.getBindVariables(), child.getBindVariableTypes())
 		if (*ctx).isBeginChild() {
 			(*ctx).setEnabled(true)
 		}
 	}
-	return nil
+	return
 }
 
 //func (r *BeginNode) processAcceptingChildren(ctx *CommandContext, loopInfo *LoopInfo) error {
@@ -253,10 +245,10 @@ func (b *IfNode) isImplementedSqlConnectorAdjustable() bool {
 func (r *IfNode) stype() string {
 	return "IfNode"
 }
-func (r *IfNode) accept(ctx *CommandContext, node *Node) error {
-	return r.doAcceptByEvaluator(ctx, nil)
+func (r *IfNode) accept(ctx *CommandContext, node *Node)  {
+	r.doAcceptByEvaluator(ctx, nil)
 }
-func (r *IfNode) doAcceptByEvaluator(ctx *CommandContext, loopInfo *LoopInfo) error {
+func (r *IfNode) doAcceptByEvaluator(ctx *CommandContext, loopInfo *LoopInfo)  {
 	cmap := (*ctx).GetArgs()
 	cmap = cmap
 	//fmt.Printf("ctx %v \n", len(cmap))
@@ -270,10 +262,7 @@ func (r *IfNode) doAcceptByEvaluator(ctx *CommandContext, loopInfo *LoopInfo) er
 	result := evaluator.evaluate()
 	log.InternalDebug(fmt.Sprintf("Else node %v\n", r.elseNode))
 	if result {
-		err := r.processAcceptingChildren(ctx, loopInfo)
-		if err != nil {
-			return err
-		}
+		r.processAcceptingChildren(ctx, loopInfo)
 		(*ctx).setEnabled(true)
 	} else if r.elseNode != nil {
 		//            if (loopInfo != null) {
@@ -283,7 +272,7 @@ func (r *IfNode) doAcceptByEvaluator(ctx *CommandContext, loopInfo *LoopInfo) er
 		r.elseNode.accept(ctx, &node)
 		//            }
 	}
-	return nil
+	return
 }
 
 type ElseNode struct {
@@ -296,14 +285,12 @@ func (b *ElseNode) isImplementedSqlConnectorAdjustable() bool {
 func (r *ElseNode) stype() string {
 	return "ElseNode"
 }
-func (r *ElseNode) accept(ctx *CommandContext, node *Node) error {
+func (r *ElseNode) accept(ctx *CommandContext, node *Node)  {
 	r.doAccept(ctx, nil)
-	return nil
 }
-func (r *ElseNode) doAccept(ctx *CommandContext, loopInfo *LoopInfo) error {
+func (r *ElseNode) doAccept(ctx *CommandContext, loopInfo *LoopInfo)  {
 	r.processAcceptingChildren(ctx, loopInfo)
 	(*ctx).setEnabled(true)
-	return nil
 }
 
 type ForNode struct {
@@ -318,8 +305,8 @@ func (b *ForNode) isImplementedSqlConnectorAdjustable() bool {
 func (r *ForNode) stype() string {
 	return "ForNode"
 }
-func (r *ForNode) accept(ctx *CommandContext, node *Node) error {
-	return nil
+func (r *ForNode) accept(ctx *CommandContext, node *Node) {
+	return
 }
 
 type EmbeddedVariableNode struct {
@@ -332,14 +319,14 @@ type EmbeddedVariableNode struct {
 func (r *EmbeddedVariableNode) stype() string {
 	return "EmbeddedVariableNode"
 }
-func (e *EmbeddedVariableNode) doProcess(ctx *CommandContext, valueAndType *ValueAndType, loopInfo *LoopInfo) error {
+func (e *EmbeddedVariableNode) doProcess(ctx *CommandContext, valueAndType *ValueAndType, loopInfo *LoopInfo) {
 	finalValue := valueAndType.targetValue
 	finalType := valueAndType.targetType
 	finalType = finalType
 
 	if e.isInScope() {
 		if finalValue == nil { // in-scope does not allow null value
-			return errors.New("BindOrEmbeddedCommentParameterNullValueException(valueAndType)")
+			panic("BindOrEmbeddedCommentParameterNullValueException(valueAndType)")
 		}
 		panic("未実装BindOrEmbeddedCommentInScope")
 		//   要確認 finalTypeがJAVAのCollection interfaceをImplementしていればの意味か
@@ -363,10 +350,7 @@ func (e *EmbeddedVariableNode) doProcess(ctx *CommandContext, valueAndType *Valu
 		} else {
 			//                // string type here
 			var embeddedStr = finalValue.(string)
-			err := e.assertNotContainBindSymbol(embeddedStr)
-			if err != nil {
-				return err
-			}
+			e.assertNotContainBindSymbol(embeddedStr)
 			if e.isQuotedScalar() { // basically for condition value
 				(*ctx).addSql(e.quote(embeddedStr))
 				//未実装
@@ -376,10 +360,7 @@ func (e *EmbeddedVariableNode) doProcess(ctx *CommandContext, valueAndType *Valu
 			} else {
 				firstValue := valueAndType.firstValue
 				firstType := valueAndType.firstType
-				bound, err := e.processDynamicBinding(ctx, firstValue, firstType, embeddedStr)
-				if err != nil {
-					return err
-				}
+				bound := e.processDynamicBinding(ctx, firstValue, firstType, embeddedStr)
 				if !bound {
 					(*ctx).addSql(embeddedStr)
 				}
@@ -397,23 +378,21 @@ func (e *EmbeddedVariableNode) doProcess(ctx *CommandContext, valueAndType *Valu
 		// the real test value is until a dot character
 		(*ctx).addSql("." + substringFirstRear(e.testValue, "."))
 	}
-	return nil
+	return
 }
 
 var CMT_0 *CommentType
 var CMT_1 *CommentType
 
-func (e *EmbeddedVariableNode) processDynamicBinding(ctx *CommandContext, firstValue interface{}, firstType string, embeddedString string) (bool, error) {
+func (e *EmbeddedVariableNode) processDynamicBinding(ctx *CommandContext, firstValue interface{}, firstType string, embeddedString string) bool {
 	first := extractScopeFirst(embeddedString, "/*", "*/")
 	if first == nil {
-		return false, nil
+		return false
 	}
 	analyzer := new(SqlAnalyzer)
 	analyzer.Setup(embeddedString, e.blockNullParameter)
-	rootNode, err := analyzer.Analyze()
-	if err != nil {
-		return false, err
-	}
+	rootNode := analyzer.Analyze()
+
 	creator := new(CommandContextCreator)
 	creator.argNames = []string{"pmb"}
 	creator.argTypes = []string{firstType}
@@ -421,7 +400,7 @@ func (e *EmbeddedVariableNode) processDynamicBinding(ctx *CommandContext, firstV
 	(*rootNode).accept(rootCtx, nil)
 	sql := (*rootCtx).getSql()
 	(*ctx).addSqlBind(sql, (*rootCtx).getBindVariables(), (*rootCtx).getBindVariableTypes())
-	return true, nil
+	return true
 }
 func (e *EmbeddedVariableNode) quote(value string) string {
 	return "'" + value + "'"
@@ -429,7 +408,7 @@ func (e *EmbeddedVariableNode) quote(value string) string {
 func (e *EmbeddedVariableNode) isQuotedScalar() bool {
 	return strings.Count(e.testValue, "'") > 1 && e.testValue[0:1] == "'" && e.testValue[len(e.testValue)-1:len(e.testValue)] == "'"
 }
-func (e *EmbeddedVariableNode) assertNotContainBindSymbol(value string) error {
+func (e *EmbeddedVariableNode) assertNotContainBindSymbol(value string) {
 	if e.containsBindSymbol(value) {
 		br := new(bytes.Buffer)
 		br.WriteString("The value of embedded comment contained bind symbols.")
@@ -440,9 +419,9 @@ func (e *EmbeddedVariableNode) assertNotContainBindSymbol(value string) error {
 		br.WriteString(e.expression)
 		br.WriteString("Embedded Value")
 		br.WriteString(value)
-		return errors.New(br.String())
+		panic(br.String())
 	}
-	return nil
+	return
 }
 func (e *EmbeddedVariableNode) containsBindSymbol(value string) bool {
 	return strings.Index(value, "?") > -1
@@ -475,21 +454,27 @@ func (b *BindVariableNode) getCommentType() *CommentType {
 	}
 	return CMT_0
 }
-func (b *BindVariableNode) doProcess(ctx *CommandContext, valueAndType *ValueAndType, loopInfo *LoopInfo) error {
+func (b *BindVariableNode) bindList(ctx*CommandContext,list *List){
+        (*ctx).addSql("(");
+        for validCount,currentElement:= range list.data {
+            if (currentElement != nil) {
+                if (validCount > 0) {
+                    (*ctx).addSql(", ");
+                }
+                (*ctx).addSqlSingle("?", currentElement,GetType(currentElement));
+            }
+        }
+        (*ctx).addSql(")");
+}
+func (b *BindVariableNode) doProcess(ctx *CommandContext, valueAndType *ValueAndType, loopInfo *LoopInfo)  {
 	finalValue := valueAndType.targetValue
 	finalType := valueAndType.targetType
 	if b.isInScope() {
 		if finalValue == nil { // in-scope does not allow null value
-			return errors.New("BindOrEmbeddedCommentParameterNullValueException(valueAndType)")
+			panic("BindOrEmbeddedCommentParameterNullValueException(valueAndType)")
 		}
-		//要確認
-		//	            if (Collection.class.isAssignableFrom(finalType)) {
-		//	                bindArray(ctx, ((Collection<?>) finalValue).toArray());
-		//	            } else if (finalType.isArray()) {
-		//	                bindArray(ctx, finalValue);
-		//	            } else {
-		//	                throwBindOrEmbeddedCommentInScopeNotListException(valueAndType);
-		//	            }
+		var l *List =finalValue.(*List)
+		b.bindList(ctx,l)
 	} else {
 		(*ctx).addSqlSingle("?", finalValue, finalType) // if null, bind as null
 		//未実装
@@ -497,7 +482,7 @@ func (b *BindVariableNode) doProcess(ctx *CommandContext, valueAndType *ValueAnd
 		//	                setupRearOption(ctx, valueAndType);
 		//	            }
 	}
-	return nil
+	return
 }
 
 type LoopBaseNode struct {
@@ -571,23 +556,24 @@ func (l *LoopBaseNode) SetupLoop(expression string, specifiedSql string) {
 }
 
 type BaseNode struct {
-	list *List
+	list       *List
 	orgAddress interface{}
 }
- func (b *BaseNode)  isBeginChildAndValidSql(ctx *CommandContext , sql string) bool{
-        return (*ctx).isBeginChild() && len(strings.TrimSpace(sql))>0
-    }
-func (b *BaseNode) getOrgAddress() interface{}{
+
+func (b *BaseNode) isBeginChildAndValidSql(ctx *CommandContext, sql string) bool {
+	return (*ctx).isBeginChild() && len(strings.TrimSpace(sql)) > 0
+}
+func (b *BaseNode) getOrgAddress() interface{} {
 	return b.orgAddress
 }
 
 func (b *BaseNode) isImplementedSqlConnectorAdjustable() bool {
 	return false
 }
-func (b *BaseNode) doProcess(ctx *CommandContext, valueAndType *ValueAndType, loopInfo *LoopInfo) error {
+func (b *BaseNode) doProcess(ctx *CommandContext, valueAndType *ValueAndType, loopInfo *LoopInfo)  {
 	//dummy Only EmbenddedVariableNode and BindVariableNode required
 	log.InternalDebug("BaseNode Process")
-	return nil
+	return
 }
 func (b *BaseNode) getCommentType() *CommentType {
 	return nil
@@ -689,21 +675,19 @@ func getPropertyValue(value interface{}, ctype string, currentName string) (stri
 	log.InternalDebug(fmt.Sprintf("value  getPropertyValue %v %T %s\n", value, value, currentName))
 	xtype := GetType(value)
 	log.InternalDebug("xtype:" + xtype)
-	xtype = xtype
-	//	if GetType(value)=="*df.ConditionBean"{
-	//		var cb *ConditionBean=value.(*ConditionBean)
-	//		var cbx ConditionBean = *cb
-	//		fmt.Printf("ConditionBea %v %T\n", cbx, cbx)
-	//	}
-	//	v := reflect.ValueOf(value).Elem()
 	v := reflect.ValueOf(value).Elem()
 	log.InternalDebug(fmt.Sprintf("new v %v %T\n", v, v))
 	newv := v.FieldByName(InitCap(currentName))
 	log.InternalDebug(fmt.Sprintf("newv  %v \n", newv))
 	if newv.IsValid() == false {
-		//どちらが良いか要検討
-		//return "string", ""
-		return "", nil
+		test2 := reflect.ValueOf(value).MethodByName(InitCap(currentName))
+		if test2.IsValid() == false {
+			return "", nil
+		}
+		nValuex := test2.Call([]reflect.Value{})
+		nValue := nValuex[0].Interface()
+		nType := GetType(nValue)
+		return nType, nValue
 	}
 	newValue := newv.Interface()
 	newType := GetType(newValue)
@@ -717,24 +701,26 @@ type SqlConnectorNode struct {
 	sqlParts    string
 	independent bool
 }
-func (s *SqlConnectorNode) stype() string{
+
+func (s *SqlConnectorNode) stype() string {
 	return "SqlConnectorNode"
 }
-func (s *SqlConnectorNode) accept(ctx *CommandContext, node *Node)  error{
-	        if (*ctx).isEnabled() || (*ctx).isAlreadySkippedConnector() {
-	            (*ctx).addSql(s.connector);
-	        } else if (s.isMarkAlreadySkipped(ctx)) {
-	            // To skip prefix should be done only once
-	            // so it marks that a prefix already skipped.
-	            (*ctx).setAlreadySkippedConnector(true);
-	        }
-	        (*ctx).addSql(s.sqlParts);
+func (s *SqlConnectorNode) accept(ctx *CommandContext, node *Node) {
+	if (*ctx).isEnabled() || (*ctx).isAlreadySkippedConnector() {
+		(*ctx).addSql(s.connector)
+	} else if s.isMarkAlreadySkipped(ctx) {
+		// To skip prefix should be done only once
+		// so it marks that a prefix already skipped.
+		(*ctx).setAlreadySkippedConnector(true)
+	}
+	(*ctx).addSql(s.sqlParts)
 
-	return nil
+	return 
 }
-func (s *SqlConnectorNode) isMarkAlreadySkipped(ctx *CommandContext) bool{
-	return !s.independent && s.isBeginChildAndValidSql(ctx, s.sqlParts);
+func (s *SqlConnectorNode) isMarkAlreadySkipped(ctx *CommandContext) bool {
+	return !s.independent && s.isBeginChildAndValidSql(ctx, s.sqlParts)
 }
+
 // BeginNode #nested @accept
 // ScopeNode
 // BaseNode #list @AddChild @GetChild @GetChildSize @Setup @doProcess @getCommentType

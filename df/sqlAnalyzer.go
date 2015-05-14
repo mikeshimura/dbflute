@@ -17,7 +17,7 @@ package df
 
 import (
 	//	"strconv"
-	"errors"
+	//"errors"
 	"fmt"
 	"github.com/mikeshimura/dbflute/log"
 	//"reflect"
@@ -59,7 +59,7 @@ func (s *SqlAnalyzer) Setup(sql string, blockNullParameter bool) {
 	s.tokenizer.Setup(sql)
 	s.blockNullParameter = blockNullParameter
 }
-func (s *SqlAnalyzer) Analyze() (*Node, error) {
+func (s *SqlAnalyzer) Analyze() *Node {
 
 	//	     push(createRootNode()); // root node of all
 	rn := s.CreateRootNode()
@@ -69,12 +69,9 @@ func (s *SqlAnalyzer) Analyze() (*Node, error) {
 	//        while (SqlTokenizer.EOF != _tokenizer.next()) {
 	//for TOK_EOF != s.tokenizer.Next() {
 	for {
-		res, err := s.tokenizer.Next()
+		res:= s.tokenizer.Next()
 		if res == TOK_EOF {
 			break
-		}
-		if err != nil {
-			return nil, err
 		}
 		s.parseToken()
 	}
@@ -83,27 +80,26 @@ func (s *SqlAnalyzer) Analyze() (*Node, error) {
 	//        return pop();
 	res := s.Pop()
 	log.InternalDebug(fmt.Sprintf("AnalyzeRoot End Node %v\n", res))
-	return res, nil
+	return res
 }
-func (s *SqlAnalyzer) parseToken() error {
-	var err error
+func (s *SqlAnalyzer) parseToken() {
 	switch s.tokenizer.tokenType {
 	case TOK_SQL:
-		err = s.parseSql()
+		s.parseSql()
 		break
 	case TOK_COMMENT:
-		err = s.parseComment()
+		s.parseComment()
 		break
 	case TOK_ELSE:
-		err = s.parseElse()
+		s.parseElse()
 		break
 	case TOK_BIND_VARIABLE:
-		err = s.parseBindVariable()
+		s.parseBindVariable()
 		break
 	}
-	return err
+	return
 }
-func (s *SqlAnalyzer) parseSql() error {
+func (s *SqlAnalyzer) parseSql() {
 	sql := ""
 
 	token := s.tokenizer.token
@@ -119,7 +115,7 @@ func (s *SqlAnalyzer) parseSql() error {
 		log.InternalDebug(fmt.Sprintf("conn %v \n", s.createSqlPartsNodeOutOfConnector(node, sql)))
 		(*node).AddChild(s.createSqlPartsNodeOutOfConnector(node, sql))
 	}
-	return nil
+	return
 }
 func (s *SqlAnalyzer) processSqlConnectorAdjustable(node *Node, sql string) {
 	st := new(SqlTokenizer)
@@ -285,7 +281,7 @@ func (s *SqlAnalyzer) isLoopVariableComment(comment string) bool {
 func (s *SqlAnalyzer) isEndComment(content string) bool {
 	return content == "END"
 }
-func (s *SqlAnalyzer) parseBegin() error {
+func (s *SqlAnalyzer) parseBegin() {
 	//final BeginNode beginNode = createBeginNode();
 	beginNode := new(BeginNode)
 	beginNode.Setup()
@@ -295,14 +291,11 @@ beginNode.orgAddress=beginNode
 	var node Node = beginNode
 	(*s.Peek()).AddChild(&node)
 	s.Push(&node)
-	err := s.parseEnd()
-	if err != nil {
-		return err
-	}
+	s.parseEnd()
 
 	//finally
 	s.inBeginScope = false
-	return nil
+	return 
 
 }
 func (s *SqlAnalyzer) parseCommentBindVariable() error {
@@ -352,32 +345,29 @@ func (s *SqlAnalyzer) createBindVariableNode(expr string, testValue string) *Nod
 	var node Node = bn
 	return &node
 }
-func (s *SqlAnalyzer) parseEnd() error {
+func (s *SqlAnalyzer) parseEnd()  {
 	commentType := TOK_COMMENT
 	//for TOK_EOF != s.tokenizer.Next() {
 	for {
-		res, err := s.tokenizer.Next()
+		res:= s.tokenizer.Next()
 		if res == TOK_EOF {
 			break
 		}
-		if err != nil {
-			return err
-		}
 		if s.tokenizer.tokenType == commentType && s.isEndComment(s.tokenizer.token) {
 			s.Pop()
-			return nil
+			return
 		}
 		s.parseToken()
 	}
 	//throwEndCommentNotFoundException();
-	return errors.New("EndCommentNotFound")
+	panic("EndCommentNotFound")
 }
-func (s *SqlAnalyzer) parseIf() error {
+func (s *SqlAnalyzer) parseIf()  {
 	comment := s.tokenizer.token
 	condition := strings.Trim(comment[len(IF_NODE_PREFIX):], " ")
 	if condition == "" {
 		//throwIfCommentConditionEmptyException();
-		return errors.New("IfCommentConditionEmpty")
+		panic("IfCommentConditionEmpty")
 	}
 	//final IfNode ifNode = createIfNode(condition);
 	in := new(IfNode)
@@ -387,15 +377,15 @@ func (s *SqlAnalyzer) parseIf() error {
 	var node Node = in
 	(*s.Peek()).AddChild(&node)
 	s.Push(&node)
-	err := s.parseEnd()
-	return err
+	s.parseEnd()
+	return
 }
-func (s *SqlAnalyzer) parseFor() error {
+func (s *SqlAnalyzer) parseFor()  {
 	comment := s.tokenizer.token
 	condition := strings.Trim(comment[len(FOR_NODE_PREFIX):], " ")
 	if condition == "" {
 		//throwForCommentExpressionEmptyException();
-		return errors.New("ForCommentExpressionEmpty")
+		panic("ForCommentExpressionEmpty")
 	}
 
 	fn := new(ForNode)
@@ -405,9 +395,9 @@ func (s *SqlAnalyzer) parseFor() error {
 	var node Node = fn
 	(*s.Peek()).AddChild(&node)
 	s.Push(&node)
-	return s.parseEnd()
+	s.parseEnd()
 }
-func (s *SqlAnalyzer) parseLoopVariable() error {
+func (s *SqlAnalyzer) parseLoopVariable()  {
 	//未実装 Priority Low
 	comment := s.tokenizer.token
 	code := substringFirstFront(comment, " ")
@@ -417,9 +407,9 @@ func (s *SqlAnalyzer) parseLoopVariable() error {
 	//            throw new IllegalStateException(msg);
 	//        }
 	if strings.Trim(code, " ") == "" {
-		return errors.New("Unknown loop variable comment: " + comment)
+		panic("Unknown loop variable comment: " + comment)
 	}
-	return nil
+	return
 	//        final LoopVariableType type = LoopVariableType.codeOf(code);
 	//        if (type == null) { // no way
 	//            String msg = "Unknown loop variable comment: " + comment;
@@ -433,23 +423,23 @@ func (s *SqlAnalyzer) parseLoopVariable() error {
 	//            parseEnd();
 	//        }
 }
-func (s *SqlAnalyzer) parseElse() error {
+func (s *SqlAnalyzer) parseElse()  {
 	parent := s.Peek()
 	stype := (*parent).stype()
 	stype = stype
 	if stype != "IfNode" {
-		return nil
+		return
 	}
 	ifNode, ok := (*s.Pop()).(*IfNode)
 	if ok == false {
-		return errors.New("not *IfNode")
+		panic("not *IfNode")
 	}
 	elseNode := s.newElseNode()
 	ifNode.elseNode = elseNode
 	var node Node = elseNode
 	s.Push(&node)
 	s.tokenizer.skipWhitespaceNoPos()
-	return nil
+	return
 }
 func (s *SqlAnalyzer) newElseNode() *ElseNode {
 	en := new(ElseNode)
@@ -493,22 +483,21 @@ func (s *SqlAnalyzer) CreateRootNode() *RootNode {
 	return node
 }
 
-func (s *SqlAnalyzer) parseComment() error {
+func (s *SqlAnalyzer) parseComment()  {
 	comment := s.tokenizer.token
-	var err error
 	if s.isTargetComment(comment) { // parameter comment
 		if s.isBeginComment(comment) {
-			err = s.parseBegin()
+			s.parseBegin()
 		} else if s.isIfComment(comment) {
-			err = s.parseIf()
+			s.parseIf()
 		} else if s.isForComment(comment) {
-			err = s.parseFor()
+			s.parseFor()
 		} else if s.isLoopVariableComment(comment) {
-			err = s.parseLoopVariable()
+			s.parseLoopVariable()
 		} else if s.isEndComment(comment) {
-			return nil
+			return
 		} else {
-			err = s.parseCommentBindVariable()
+			s.parseCommentBindVariable()
 		}
 		//       } else if (Srl.is_NotNull_and_NotTrimmedEmpty(comment)) { // plain comment
 	} else if len(strings.Trim(comment, " ")) > 0 {
@@ -516,6 +505,6 @@ func (s *SqlAnalyzer) parseComment() error {
 		content := before[strings.LastIndex(before, "/*"):]
 		(*s.Peek()).AddChild(s.createSqlPartsNode(content))
 	}
-	return err
+	return
 
 }

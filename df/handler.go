@@ -19,7 +19,7 @@ import (
 	//"container/list"
 	//	"bytes"
 	"database/sql"
-	"errors"
+	//"errors"
 	"fmt"
 	"github.com/mikeshimura/dbflute/log"
 	//	"path/filepath"
@@ -29,19 +29,16 @@ import (
 )
 
 type ParameterHandler interface {
-	execute(bindVariables *List, bindVariableTypes *StringList, tx *sql.Tx, behavior *Behavior) (interface{}, error)
+	execute(bindVariables *List, bindVariableTypes *StringList, tx *sql.Tx, behavior *Behavior) interface{}
 }
 type TnBasicUpdateHandler struct {
 	TnBasicParameterHandler
 }
 
-func (t *TnBasicUpdateHandler) execute(bindVariables *List, bindVariableTypes *StringList, tx *sql.Tx, behavior *Behavior) (interface{}, error) {
+func (t *TnBasicUpdateHandler) execute(bindVariables *List, bindVariableTypes *StringList, tx *sql.Tx, behavior *Behavior) interface{} {
 	dbc := (*(*behavior).GetBaseBehavior().GetBehaviorCommandInvoker().InvokerAssistant).GetDBCurrent()
 
-	ps, err2 := (*t.statementFactory).PrepareStatement(t.sql, tx, dbc)
-	if err2 != nil {
-		return 0, err2
-	}
+	ps := (*t.statementFactory).PrepareStatement(t.sql, tx, dbc)
 	defer ps.Close()
 	bindVar := (*t.statementFactory).ModifyBindVariables(bindVariables, bindVariableTypes)
 	//ps := t.prepareStatement(tx, dbc)
@@ -50,11 +47,11 @@ func (t *TnBasicUpdateHandler) execute(bindVariables *List, bindVariableTypes *S
 	//	ns.String="2"
 	//	var itest interface{}=ns
 	t.logSql(bindVariables, bindVariableTypes)
-	res, err1 := tx.Stmt(ps).Exec(bindVar.data...)
-	if err1 != nil {
-		DFErrorLog(err1.Error())
-		return 0, err1
+	res, err := tx.Stmt(ps).Exec(bindVar.data...)
+	if err != nil {
+		panic(err.Error())
 	}
+
 	updateno, _ := res.RowsAffected()
 	log.InternalDebug(fmt.Sprintln("result no:", updateno))
 
@@ -72,22 +69,19 @@ func (t *TnBasicUpdateHandler) execute(bindVariables *List, bindVariableTypes *S
 	//        } finally {
 	//            close(ps);
 	//        }
-	return updateno, nil
+	return updateno
 }
 
 type TnBasicSelectHandler struct {
 	TnBasicParameterHandler
 	ResultType string
+	SqlClause interface{}
 }
 
-func (t *TnBasicSelectHandler) execute(bindVariables *List, bindVariableTypes *StringList, tx *sql.Tx, behavior *Behavior) (interface{}, error) {
+func (t *TnBasicSelectHandler) execute(bindVariables *List, bindVariableTypes *StringList, tx *sql.Tx, behavior *Behavior) interface{} {
 	dbc := (*(*behavior).GetBaseBehavior().GetBehaviorCommandInvoker().InvokerAssistant).GetDBCurrent()
 
-	ps, err2 := (*t.statementFactory).PrepareStatement(t.sql, tx, dbc)
-	if err2 != nil {
-		log.InternalDebug("err2:" + err2.Error())
-		return nil, err2
-	}
+	ps := (*t.statementFactory).PrepareStatement(t.sql, tx, dbc)
 	defer ps.Close()
 	bindVar := (*t.statementFactory).ModifyBindVariables(bindVariables, bindVariableTypes)
 	//ps := t.prepareStatement(tx, dbc)
@@ -96,22 +90,24 @@ func (t *TnBasicSelectHandler) execute(bindVariables *List, bindVariableTypes *S
 	//	ns.String="2"
 	//	var itest interface{}=ns
 	t.logSql(bindVariables, bindVariableTypes)
-	var err1 error
 	var rows *sql.Rows
+	var err error
 	if bindVariables == nil {
-		rows, err1 = tx.Stmt(ps).Query()
+		rows, err = tx.Stmt(ps).Query()
+		if err != nil {
+			panic(err.Error())
+		}
 	} else {
-		rows, err1 = tx.Stmt(ps).Query(bindVar.data...)
+		rows, err = tx.Stmt(ps).Query(bindVar.data...)
+		if err != nil {
+			panic(err.Error())
+		}
 	}
-	if err1 != nil {
-		DFErrorLog(err1.Error())
-		return nil, err1
-	}
+
 	log.InternalDebug(fmt.Sprintln("ResultType:", t.ResultType))
-	l, err := BhvUtil_I.GetListResultBean(rows, t.ResultType)
-	if err != nil {
-		return nil, err
-	}
+	rh:=new(ResultSetHandler)
+	//l := BhvUtil_I.GetListResultBean(rows, t.ResultType,t.SqlClause)
+	l :=rh.GetListResultBean(rows, t.ResultType,t.SqlClause)
 	log.InternalDebug(fmt.Sprintln("result no:", l.List.Size()))
 	log.InternalDebug(fmt.Sprintf("data %v\n", l.List.Get(0)))
 	//        logSql(args, argTypes);
@@ -128,7 +124,7 @@ func (t *TnBasicSelectHandler) execute(bindVariables *List, bindVariableTypes *S
 	//        } finally {
 	//            close(ps);
 	//        }
-	return l, nil
+	return l
 }
 func (t *TnBasicSelectHandler) logSql(args *List, argTypes *StringList) {
 	//	        final boolean logEnabled = isLogEnabled();
@@ -340,14 +336,11 @@ func (t *TnAbstractEntityHandler) setupDeleteBindVariables(entity *Entity) {
 	t.bindVariableValueTypes = varValueTypeList
 }
 
-func (t *TnAbstractEntityHandler) execute(entity *Entity, tx *sql.Tx) (int64, error) {
+func (t *TnAbstractEntityHandler) execute(entity *Entity, tx *sql.Tx) int64 {
 	//        processBefore(bean);
 	(*t.BasicSqlHander).setupBindVariables(entity)
 	t.logSql(t.bindVariables, t.bindVariableValueTypes)
-	ps, err := (*t.statementFactory).PrepareStatement(t.sql, tx, (*(*entity).GetDBMeta()).GetDbCurrent())
-	if err != nil {
-		return 0, err
-	}
+	ps := (*t.statementFactory).PrepareStatement(t.sql, tx, (*(*entity).GetDBMeta()).GetDbCurrent())
 	defer ps.Close()
 	bindVar := (*t.statementFactory).ModifyBindVariables(t.bindVariables, t.bindVariableValueTypes)
 	//        RuntimeException sqlEx = null;
@@ -358,16 +351,12 @@ func (t *TnAbstractEntityHandler) execute(entity *Entity, tx *sql.Tx) (int64, er
 	//fmt.Printf("tx %v ps %v bindVar %v\n", tx, ps, bindVar)
 	res, err := tx.Stmt(ps).Exec(bindVar.data...)
 	if err != nil {
-		DFErrorLog(err.Error())
-		return 0, err
+		panic(err.Error())
 	}
 	updateno, _ := res.RowsAffected()
 	idno, _ := res.LastInsertId()
 	log.InternalDebug(fmt.Sprintf("idno %d \n", idno))
-	err2 := t.handleUpdateResultWithOptimisticLock(entity, updateno)
-	if err2 != nil {
-		return 0, err2
-	}
+	t.handleUpdateResultWithOptimisticLock(entity, updateno)
 	//        } catch (RuntimeException e) {
 	//            // not SQLFailureException because the JDBC wrapper may throw an other exception
 	//            sqlEx = e;
@@ -382,14 +371,14 @@ func (t *TnAbstractEntityHandler) execute(entity *Entity, tx *sql.Tx) (int64, er
 	//        return ret;
 	//fmt.Printf("BasicSqlHander %v entity %v updateno %v\n", t.BasicSqlHander, entity, updateno)
 	(*t.BasicSqlHander).processSuccess(entity, updateno, idno)
-	return updateno, err
+	return updateno
 }
 
-func (t *TnAbstractEntityHandler) handleUpdateResultWithOptimisticLock(entity *Entity, updateno int64) error {
+func (t *TnAbstractEntityHandler) handleUpdateResultWithOptimisticLock(entity *Entity, updateno int64) {
 	if t.optimisticLockHandling && updateno < 1 { // means no update (contains minus just in case)
-		return errors.New("EntityAlreadyUpdatedException")
+		panic("EntityAlreadyUpdatedException")
 	}
-	return nil
+	return
 }
 func (t *TnAbstractEntityHandler) setupUpdateBindVariables(entity *Entity) {
 	//	        setupUpdateBindVariables(bean);

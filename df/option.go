@@ -58,7 +58,7 @@ func (d *DummyOption) GetRearOption() string {
 }
 
 type LikeSearchOption struct {
-	SimpleStringOption
+	SimpleStringOption SimpleStringOption
 	like                   string
 	escapechar             string
 	asOrSplit              bool
@@ -72,22 +72,26 @@ func (l *LikeSearchOption) HasCompoundColumn() bool {
 	return l.compoundColumnList != nil && l.compoundColumnList.Size() > 0
 }
 
-func (l *LikeSearchOption) LikePrefix() {
+func (l *LikeSearchOption) LikePrefix() *LikeSearchOption{
 	l.like = LIKE_PREFIX
 	l.EscapeByPipeLine()
+	return l
 }
 
-func (l *LikeSearchOption) LikeSuffix() {
+func (l *LikeSearchOption) LikeSuffix() *LikeSearchOption{
 	l.like = LIKE_SUFFIX
 	l.EscapeByPipeLine()
+	return l
 }
 
-func (l *LikeSearchOption) LikeContain() {
+func (l *LikeSearchOption) LikeContain() *LikeSearchOption{
 	l.like = LIKE_CONTAIN
 	l.EscapeByPipeLine()
+	return l
 }
 func (l *LikeSearchOption) Escape() *LikeSearchOption {
-	return l.EscapeByPipeLine()
+	l.EscapeByPipeLine()
+	return l
 }
 
 func (l *LikeSearchOption) EscapeByPipeLine() *LikeSearchOption {
@@ -159,7 +163,33 @@ func (l *LikeSearchOption) GenerateRealValue(value string) string {
 func (l *LikeSearchOption) filterEscape(target string, wildCard string) string {
 	return strings.Replace(target, wildCard, l.escapechar+wildCard, -1)
 }
-
+func (s *LikeSearchOption) SplitByBlank() *LikeSearchOption{
+	s.SimpleStringOption.splitByBlank()
+	return s
+}
+func (s *LikeSearchOption) SplitBySpace() *LikeSearchOption {
+	s.SimpleStringOption.splitBySpace()
+	return s
+}
+func (s *LikeSearchOption) SplitBySpaceContainsDoubleByte() *LikeSearchOption {
+	s.SimpleStringOption.splitBySpaceContainsDoubleByte()
+	return s
+}
+func (s *LikeSearchOption) SplitByPipeLine() *LikeSearchOption {
+	s.SimpleStringOption.splitByPipeLine()
+	return s
+}
+func (s *LikeSearchOption) LimitSplit(splitLimitCount int) *LikeSearchOption {
+	s.SimpleStringOption.limitSplit(splitLimitCount)
+	return s
+}
+func (s *LikeSearchOption) isSplit() bool {
+	//fmt.Printf("delimiter %v\n", s.delimiter)
+	return s.SimpleStringOption.delimiter != ""
+}
+func (s *LikeSearchOption) GenerateSplitValueArray(value string) []string {
+	return s.SimpleStringOption.GenerateSplitValueArray(value)
+}
 type StringConnector interface {
 	connect(element ...string) string
 }
@@ -250,6 +280,7 @@ func (s *SplitOptionParts) splitByBlank() {
 }
 func (s *SplitOptionParts) splitBySpace() {
 	s.delimiter = " "
+	s.subDelimiterList = new(StringList)
 }
 func (s *SplitOptionParts) splitBySpaceContainsDoubleByte() {
 	s.splitBySpace()
@@ -258,6 +289,7 @@ func (s *SplitOptionParts) splitBySpaceContainsDoubleByte() {
 }
 func (s *SplitOptionParts) splitByPipeLine() {
 	s.delimiter = "|"
+	s.subDelimiterList = new(StringList)
 }
 func (s *SplitOptionParts) limitSplit(splitLimitCount int) {
 	s.splitLimitCount = splitLimitCount
@@ -298,7 +330,7 @@ func (s *SplitOptionParts) GenerateSplitValueArray(value string) []string {
 			break
 		}
 	}
-	if (result.Size() < s.splitLimitCount) && (len(value) > 0) {
+	if (s.splitLimitCount == 0 || result.Size() < s.splitLimitCount) && (len(value) > 0) {
 		result.Add(value)
 	}
 	var sres []string = make([]string, result.Size())

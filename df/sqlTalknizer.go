@@ -16,7 +16,7 @@
 package df
 
 import (
-	"errors"
+//	"errors"
 	"strconv"
 	"strings"
 )
@@ -36,9 +36,8 @@ func (s *SqlTokenizer) Setup(sql string) {
 	s.nextTokenType = TOK_SQL
 }
 
-func (s *SqlTokenizer) Next() (int, error) {
+func (s *SqlTokenizer) Next() int {
 	//	        if (_position >= _sql.length()) {
-	var err error
 	if s.position >= len(s.sql) {
 
 		//            _token = null;
@@ -49,7 +48,7 @@ func (s *SqlTokenizer) Next() (int, error) {
 		s.token = ""
 		s.tokenType = TOK_EOF
 		s.nextTokenType = TOK_EOF
-		return s.tokenType, nil
+		return s.tokenType
 	}
 	//        switch (_nextTokenType) {
 	//        case SQL:
@@ -71,20 +70,20 @@ func (s *SqlTokenizer) Next() (int, error) {
 	//        return _tokenType;
 	switch s.nextTokenType {
 	case TOK_SQL:
-		err = s.parseSql()
+		s.parseSql()
 	case TOK_COMMENT:
-		err = s.parseComment()
+		s.parseComment()
 	case TOK_ELSE:
-		err = s.parseElse()
+		s.parseElse()
 	case TOK_BIND_VARIABLE:
-		err = s.parseBindVariable()
+		s.parseBindVariable()
 	default:
-		err = s.parseEof()
+		s.parseEof()
 
 	}
-	return s.tokenType, err
+	return s.tokenType
 }
-func (s *SqlTokenizer) parseSql() error {
+func (s *SqlTokenizer) parseSql() {
 	//        int commentStartPos = _sql.indexOf("/*", _position);
 	commentStartPos := IndexAfter(s.sql, "/*", s.position)
 	//        int commentStartPos2 = _sql.indexOf("#*", _position);
@@ -161,41 +160,41 @@ func (s *SqlTokenizer) parseSql() error {
 			s.Next()
 		}
 	}
-	return nil
+	return
 }
-func (s *SqlTokenizer) parseComment() error {
+func (s *SqlTokenizer) parseComment()  {
 	commentEndPos := IndexAfter(s.sql, "*/", s.position)
 	commentEndPos2 := IndexAfter(s.sql, "*#", s.position)
 	if 0 < commentEndPos2 && commentEndPos2 < commentEndPos {
 		commentEndPos = commentEndPos2
 	}
 	if commentEndPos < 0 {
-		return errors.New("CommentTerminatorNotFoundException" + s.sql[s.position:])
+		panic("CommentTerminatorNotFoundException" + s.sql[s.position:])
 	}
 	s.token = s.sql[s.position:commentEndPos]
 	s.nextTokenType = TOK_SQL
 	s.position = commentEndPos + 2
 	s.tokenType = TOK_COMMENT
-	return nil
+	return
 }
-func (s *SqlTokenizer) parseElse() error {
+func (s *SqlTokenizer) parseElse()  {
 	s.token = ""
 	s.nextTokenType = TOK_SQL
 	s.tokenType = TOK_ELSE
-	return nil
+	return 
 }
-func (s *SqlTokenizer) parseBindVariable() error {
+func (s *SqlTokenizer) parseBindVariable() {
 	s.token = s.nextBindVariableName()
 	s.nextTokenType = TOK_SQL
 	s.position += 1
 	s.tokenType = TOK_BIND_VARIABLE
-	return nil
+	return
 }
-func (s *SqlTokenizer) parseEof() error {
+func (s *SqlTokenizer) parseEof(){
 	s.token = ""
 	s.tokenType = TOK_EOF
 	s.nextTokenType = TOK_EOF
-	return nil
+	return
 }
 func (s *SqlTokenizer) calculateNextStartPos(commentStartPos int, bindVariableStartPos int, elseCommentStartPos int) int {
 	//	        int nextStartPos = -1;

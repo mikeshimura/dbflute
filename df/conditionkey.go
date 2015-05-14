@@ -42,17 +42,31 @@ const (
 	C_GEISN            = "greaterEqualOrIsNull"
 	C_LTISN            = "lessThanOrIsNull"
 	C_LEISN            = "lessEqualOrIsNull"
+	C_INS              = "inScope"
 )
 
 type ConditionKey interface {
-	AddWhereClause(ck *ConditionKey, qmp *QueryModeProvider, conditionList *List, columnRealName *ColumnRealName, cvalue *ConditionValue, co *ConditionOption)
-	DoAddWhereClause(conditionList *List, columnRealName *ColumnRealName, cvalue *ConditionValue, co *ConditionOption)
+	AddWhereClause(ck *ConditionKey, qmp *QueryModeProvider, conditionList *List,
+		columnRealName *ColumnRealName, cvalue *ConditionValue, co *ConditionOption)
+	DoAddWhereClause(conditionList *List, columnRealName *ColumnRealName,
+		cvalue *ConditionValue, co *ConditionOption)
 	GetConditionKeyS() string
 	GetOperand() string
-	DoSetupConditionValue(cvalue *ConditionValue, value interface{}, location string, co *ConditionOption)
-	SetupConditionValue(ck *ConditionKey, qmp *QueryModeProvider, cvalue *ConditionValue, value interface{}, location string, co *ConditionOption)
-	BuildBindClause(columnRealName *ColumnRealName, loc string, co *ConditionOption) *QueryClause
-	IsValidRegistration(provider *QueryModeProvider, cvalue *ConditionValue, value interface{}, callerName *ColumnRealName) bool
+	DoSetupConditionValue(cvalue *ConditionValue, value interface{},
+		location string, co *ConditionOption)
+	SetupConditionValue(ck *ConditionKey, qmp *QueryModeProvider,
+		cvalue *ConditionValue, value interface{}, location string, co *ConditionOption)
+	BuildBindClause(columnRealName *ColumnRealName, loc string,
+		co *ConditionOption) *QueryClause
+	IsValidRegistration(provider *QueryModeProvider, cvalue *ConditionValue,
+		value interface{}, callerName *ColumnRealName) bool
+	GetBindVariableDummyValue() string
+}
+
+func ConditionKey_IsNullaleConditionKey(key *ConditionKey) bool {
+	return CK_GEISN.conditionKey == key || CK_GTISN.conditionKey == key ||
+		CK_LEISN.conditionKey == key || CK_LTISN.conditionKey == key ||
+		CK_ISN.conditionKey == key || CK_ISNOE.conditionKey == key
 }
 
 type BaseConditionKey struct {
@@ -61,11 +75,13 @@ type BaseConditionKey struct {
 	conditionKey  *ConditionKey
 }
 
-func (w *BaseConditionKey) IsValidRegistration(provider *QueryModeProvider, cvalue *ConditionValue, value interface{}, callerName *ColumnRealName) bool {
+func (w *BaseConditionKey) IsValidRegistration(provider *QueryModeProvider,
+	cvalue *ConditionValue, value interface{}, callerName *ColumnRealName) bool {
 	//only null check implemented
 	return IsNotNull(value)
 }
-func (w *BaseConditionKey) BuildBindClauseOrIsNull(columnRealName *ColumnRealName, loc string, co *ConditionOption) *QueryClause {
+func (w *BaseConditionKey) BuildBindClauseOrIsNull(columnRealName *ColumnRealName,
+	loc string, co *ConditionOption) *QueryClause {
 	mainQuery := w.DoBuildBindClause(columnRealName, loc, co)
 	clause := "(" + mainQuery + " or " + columnRealName.ToString() + " is null)"
 	sqc := new(StringQueryClause)
@@ -75,18 +91,21 @@ func (w *BaseConditionKey) BuildBindClauseOrIsNull(columnRealName *ColumnRealNam
 	return &qc
 }
 
-func (w *BaseConditionKey) BuildBindClause(columnRealName *ColumnRealName, loc string, co *ConditionOption) *QueryClause {
+func (w *BaseConditionKey) BuildBindClause(columnRealName *ColumnRealName,
+	loc string, co *ConditionOption) *QueryClause {
 	sqc := CreateStringQueryClause(w.DoBuildBindClause(columnRealName, loc, co))
 	var qc QueryClause = sqc
 	log.InternalDebug(fmt.Sprintf(" QueryClause %v \n", qc))
 	return &qc
 }
-func (w *BaseConditionKey) DoBuildBindClause(columnRealName *ColumnRealName, loc string, co *ConditionOption) string {
+func (w *BaseConditionKey) DoBuildBindClause(columnRealName *ColumnRealName,
+	loc string, co *ConditionOption) string {
 	result := w.ResolveBindClause(columnRealName, loc, co)
 	log.InternalDebug(fmt.Sprintf(" result %v \n", result))
 	return result.ToBindClause()
 }
-func (w *BaseConditionKey) ResolveBindClause(columnRealName *ColumnRealName, loc string, co *ConditionOption) *BindClauseResult {
+func (w *BaseConditionKey) ResolveBindClause(columnRealName *ColumnRealName,
+	loc string, co *ConditionOption) *BindClauseResult {
 	var basicBindExp string
 	if loc != "" {
 		basicBindExp = w.BuildBindVariableExp(loc, co)
@@ -96,10 +115,12 @@ func (w *BaseConditionKey) ResolveBindClause(columnRealName *ColumnRealName, loc
 	return w.CreateBindClauseResult(resolvedColumn, basicBindExp, co)
 
 }
-func (w *BaseConditionKey) ResolveOptionalColumn(columnExp *ColumnRealName, co *ConditionOption) *ColumnRealName {
+func (w *BaseConditionKey) ResolveOptionalColumn(columnExp *ColumnRealName,
+	co *ConditionOption) *ColumnRealName {
 	return w.ResolveCalculationColumn(w.ResolveCompoundColumn(columnExp, co), co)
 }
-func (w *BaseConditionKey) ResolveCalculationColumn(columnRealName *ColumnRealName, co *ConditionOption) *ColumnRealName {
+func (w *BaseConditionKey) ResolveCalculationColumn(columnRealName *ColumnRealName,
+	co *ConditionOption) *ColumnRealName {
 	if co == nil {
 		return columnRealName
 	}
@@ -107,14 +128,16 @@ func (w *BaseConditionKey) ResolveCalculationColumn(columnRealName *ColumnRealNa
 	return columnRealName
 }
 
-func (w *BaseConditionKey) ResolveCompoundColumn(baseRealName *ColumnRealName, co *ConditionOption) *ColumnRealName {
+func (w *BaseConditionKey) ResolveCompoundColumn(baseRealName *ColumnRealName,
+	co *ConditionOption) *ColumnRealName {
 	if co == nil || !(*co).HasCompoundColumn() {
 		return baseRealName
 	}
 	//未実装
 	return baseRealName
 }
-func (w *BaseConditionKey) CreateBindClauseResult(columnExp *ColumnRealName, bindExp string, co *ConditionOption) *BindClauseResult {
+func (w *BaseConditionKey) CreateBindClauseResult(columnExp *ColumnRealName,
+	bindExp string, co *ConditionOption) *BindClauseResult {
 	op := w.ResolveOperand(co)
 	rearOption := w.ResolveRearOption(co)
 	//fmt.Printf("op %v rearOption %v \n", op, rearOption)
@@ -122,7 +145,8 @@ func (w *BaseConditionKey) CreateBindClauseResult(columnExp *ColumnRealName, bin
 	result.Arranger = w.ResolveWhereClauseArranger(co)
 	return result
 }
-func (w *BaseConditionKey) ResolveWhereClauseArranger(co *ConditionOption) *QueryClauseArranger {
+func (w *BaseConditionKey) ResolveWhereClauseArranger(
+	co *ConditionOption) *QueryClauseArranger {
 	//未実装
 	return nil
 }
@@ -145,12 +169,12 @@ func (w *BaseConditionKey) ExtractExtOperand(co *ConditionOption) string {
 	//未実装
 	return ""
 }
-func (w *BaseConditionKey) BuildBindVariableExp(loc string, co *ConditionOption) string {
-	return "/*pmb." + loc + "*/" + w.GetBindVariableDummyValue()
+func (w *BaseConditionKey) BuildBindVariableExp(
+	loc string, co *ConditionOption) string {
+	return "/*pmb." + loc + "*/" + (*w.conditionKey).GetBindVariableDummyValue()
 }
 func (w *BaseConditionKey) GetBindVariableDummyValue() string {
-	//要チェック "null" or ""
-	return "null"
+	return ""
 }
 
 type BindClauseResult struct {
@@ -161,7 +185,8 @@ type BindClauseResult struct {
 	Arranger   *QueryClauseArranger
 }
 
-func NewBindClauseResult(ColumnExp *ColumnRealName, Operand string, BindExp string, RearOption string) *BindClauseResult {
+func NewBindClauseResult(ColumnExp *ColumnRealName, Operand string,
+	BindExp string, RearOption string) *BindClauseResult {
 	bcr := new(BindClauseResult)
 	bcr.ColumnExp = ColumnExp
 	bcr.Operand = Operand
@@ -176,7 +201,8 @@ func (b *BindClauseResult) ToBindClause() string {
 	//	if b.Arranger != nil {
 	//		clause = (*b.Arranger).Arrange(b.ColumnExp, b.Operand, b.BindExp, b.RearOption)
 	//	} else {
-	clause = b.ColumnExp.ToString() + " " + b.Operand + " " + b.BindExp + b.RearOption
+	clause = b.ColumnExp.ToString() + " " + b.Operand + " " +
+		b.BindExp + b.RearOption
 	//	}
 	log.InternalDebug("operand :" + b.Operand)
 	log.InternalDebug("clause:" + clause)
@@ -186,20 +212,24 @@ func (b *BindClauseResult) ToBindClause() string {
 }
 
 type QueryClauseArranger interface {
-	Arrange(columnRealName *ColumnRealName, operand string, bindExpression string, rearOption string) string
+	Arrange(columnRealName *ColumnRealName, operand string,
+		bindExpression string, rearOption string) string
 }
 
-func (w *BaseConditionKey) AddWhereClause(ck *ConditionKey, qmp *QueryModeProvider, conditionList *List, columnRealName *ColumnRealName, cvalue *ConditionValue, co *ConditionOption) {
-	cvalue.OrScopeQuery = qmp.IsOrScopeQuery
+func (w *BaseConditionKey) AddWhereClause(ck *ConditionKey,
+	qmp *QueryModeProvider, conditionList *List, columnRealName *ColumnRealName,
+	cvalue *ConditionValue, co *ConditionOption) {
+	cvalue.OrScopeQuery = qmp.IsOrScopeQuery()
 	cvalue.Inline = qmp.IsInline
 	cvalue.OnClause = qmp.IsOnClause
 	(*ck).DoAddWhereClause(conditionList, columnRealName, cvalue, co)
-	cvalue.OrScopeQuery = false
-	cvalue.Inline = false
-	cvalue.OnClause = false
+//	cvalue.OrScopeQuery = false
+//	cvalue.Inline = false
+//	cvalue.OnClause = false
 }
 
-func (w *BaseConditionKey) DoAddWhereClause(conditionList *List, columnRealName *ColumnRealName, cvalue *ConditionValue, co *ConditionOption) {
+func (w *BaseConditionKey) DoAddWhereClause(conditionList *List,
+	columnRealName *ColumnRealName, cvalue *ConditionValue, co *ConditionOption) {
 }
 func (w *BaseConditionKey) GetConditionKeyS() string {
 	return w.ConditionKeyS
@@ -208,21 +238,22 @@ func (w *BaseConditionKey) GetConditionKeyS() string {
 func (w *BaseConditionKey) GetOperand() string {
 	return w.Operand
 }
-func (w *BaseConditionKey) DoSetupConditionValue(cvalue *ConditionValue, value interface{}, location string, co *ConditionOption) {
+func (w *BaseConditionKey) DoSetupConditionValue(cvalue *ConditionValue,
+	value interface{}, location string, co *ConditionOption) {
 }
 
-func (w *BaseConditionKey) SetupConditionValue(ck *ConditionKey, qmp *QueryModeProvider, cvalue *ConditionValue, value interface{}, location string, co *ConditionOption) {
-	cvalue.OrScopeQuery = qmp.IsOrScopeQuery
+func (w *BaseConditionKey) SetupConditionValue(ck *ConditionKey,
+	qmp *QueryModeProvider, cvalue *ConditionValue, value interface{},
+	location string, co *ConditionOption) {
+	cvalue.OrScopeQuery = qmp.IsOrScopeQuery()
 	cvalue.Inline = qmp.IsInline
 	cvalue.OnClause = qmp.IsOnClause
 	(*ck).DoSetupConditionValue(cvalue, value, location, co)
-	cvalue.OrScopeQuery = false
-	cvalue.Inline = false
-	cvalue.OnClause = false
+//	cvalue.OrScopeQuery = false
+//	cvalue.Inline = false
+//	cvalue.OnClause = false
 	//fmt.Printf("CK EQ lastlocation %v \n", cvalue.EqualLatestLocation)
 }
-
-
 
 type QueryClause interface {
 	ToString() string
@@ -256,13 +287,16 @@ type CK_EQ_T struct {
 	BaseConditionKey
 }
 
-func (w *CK_EQ_T) DoSetupConditionValue(cvalue *ConditionValue, value interface{}, location string, co *ConditionOption) {
+func (w *CK_EQ_T) DoSetupConditionValue(cvalue *ConditionValue, value interface{},
+	location string, co *ConditionOption) {
 	//fmt.Println("EQl DoSetup")
 	cvalue.SetupEqual(value, location)
 }
-func (w *CK_EQ_T) DoAddWhereClause(conditionList *List, columnRealName *ColumnRealName, cvalue *ConditionValue, co *ConditionOption) {
+func (w *CK_EQ_T) DoAddWhereClause(conditionList *List, columnRealName *ColumnRealName,
+	cvalue *ConditionValue, co *ConditionOption) {
 	conditionList.Add(w.BuildBindClause(columnRealName, cvalue.EqualLatestLocation, co))
 }
+
 var CK_EQ *CK_EQ_T
 var CK_EQ_C *ConditionKey
 
@@ -270,12 +304,16 @@ type CK_GT_T struct {
 	BaseConditionKey
 }
 
-func (w *CK_GT_T) DoSetupConditionValue(cvalue *ConditionValue, value interface{}, location string, co *ConditionOption) {
+func (w *CK_GT_T) DoSetupConditionValue(cvalue *ConditionValue, value interface{},
+	location string, co *ConditionOption) {
 	cvalue.SetupGreaterThan(value, location)
 }
-func (w *CK_GT_T) DoAddWhereClause(conditionList *List, columnRealName *ColumnRealName, cvalue *ConditionValue, co *ConditionOption) {
-	conditionList.Add((*w.conditionKey).BuildBindClause(columnRealName, cvalue.GreaterThanLatestLocation, co))
+func (w *CK_GT_T) DoAddWhereClause(conditionList *List, columnRealName *ColumnRealName,
+	cvalue *ConditionValue, co *ConditionOption) {
+	conditionList.Add((*w.conditionKey).BuildBindClause(columnRealName,
+		cvalue.GreaterThanLatestLocation, co))
 }
+
 var CK_GT *CK_GT_T
 var CK_GT_C *ConditionKey
 
@@ -283,12 +321,16 @@ type CK_NE_T struct {
 	BaseConditionKey
 }
 
-func (w *CK_NE_T) DoSetupConditionValue(cvalue *ConditionValue, value interface{}, location string, co *ConditionOption) {
+func (w *CK_NE_T) DoSetupConditionValue(cvalue *ConditionValue,
+	value interface{}, location string, co *ConditionOption) {
 	cvalue.SetupNotEqual(value, location)
 }
-func (w *CK_NE_T) DoAddWhereClause(conditionList *List, columnRealName *ColumnRealName, cvalue *ConditionValue, co *ConditionOption) {
-	conditionList.Add((*w.conditionKey).BuildBindClause(columnRealName, cvalue.NotEqualLatestLocation, co))
+func (w *CK_NE_T) DoAddWhereClause(conditionList *List,
+	columnRealName *ColumnRealName, cvalue *ConditionValue, co *ConditionOption) {
+	conditionList.Add((*w.conditionKey).BuildBindClause(
+		columnRealName, cvalue.NotEqualLatestLocation, co))
 }
+
 var CK_NE *CK_NE_T
 var CK_NE_C *ConditionKey
 
@@ -296,13 +338,17 @@ type CK_LT_T struct {
 	BaseConditionKey
 }
 
-func (w *CK_LT_T) DoSetupConditionValue(cvalue *ConditionValue, value interface{}, location string, co *ConditionOption) {
+func (w *CK_LT_T) DoSetupConditionValue(cvalue *ConditionValue, value interface{},
+	location string, co *ConditionOption) {
 	cvalue.SetupLessThan(value, location)
 }
-func (w *CK_LT_T) DoAddWhereClause(conditionList *List, columnRealName *ColumnRealName, cvalue *ConditionValue, co *ConditionOption) {
-	conditionList.Add((*w.conditionKey).BuildBindClause(columnRealName, cvalue.LessThanLatestLocation, co))
+func (w *CK_LT_T) DoAddWhereClause(conditionList *List,
+	columnRealName *ColumnRealName, cvalue *ConditionValue, co *ConditionOption) {
+	conditionList.Add((*w.conditionKey).BuildBindClause(
+		columnRealName, cvalue.LessThanLatestLocation, co))
 
 }
+
 var CK_LT *CK_LT_T
 var CK_LT_C *ConditionKey
 
@@ -310,13 +356,17 @@ type CK_GE_T struct {
 	BaseConditionKey
 }
 
-func (w *CK_GE_T) DoSetupConditionValue(cvalue *ConditionValue, value interface{}, location string, co *ConditionOption) {
+func (w *CK_GE_T) DoSetupConditionValue(cvalue *ConditionValue,
+	value interface{}, location string, co *ConditionOption) {
 	cvalue.SetupGreaterEqual(value, location)
 }
-func (w *CK_GE_T) DoAddWhereClause(conditionList *List, columnRealName *ColumnRealName, cvalue *ConditionValue, co *ConditionOption) {
-	conditionList.Add((*w.conditionKey).BuildBindClause(columnRealName, cvalue.GreaterEqualLatestLocation, co))
+func (w *CK_GE_T) DoAddWhereClause(conditionList *List, columnRealName *ColumnRealName,
+	cvalue *ConditionValue, co *ConditionOption) {
+	conditionList.Add((*w.conditionKey).BuildBindClause(
+		columnRealName, cvalue.GreaterEqualLatestLocation, co))
 
 }
+
 var CK_GE *CK_GE_T
 var CK_GE_C *ConditionKey
 
@@ -324,13 +374,17 @@ type CK_LE_T struct {
 	BaseConditionKey
 }
 
-func (w *CK_LE_T) DoSetupConditionValue(cvalue *ConditionValue, value interface{}, location string, co *ConditionOption) {
+func (w *CK_LE_T) DoSetupConditionValue(cvalue *ConditionValue, value interface{},
+	location string, co *ConditionOption) {
 	cvalue.SetupLessEqual(value, location)
 }
-func (w *CK_LE_T) DoAddWhereClause(conditionList *List, columnRealName *ColumnRealName, cvalue *ConditionValue, co *ConditionOption) {
-	conditionList.Add((*w.conditionKey).BuildBindClause(columnRealName, cvalue.LessEqualLatestLocation, co))
+func (w *CK_LE_T) DoAddWhereClause(conditionList *List, columnRealName *ColumnRealName,
+	cvalue *ConditionValue, co *ConditionOption) {
+	conditionList.Add((*w.conditionKey).BuildBindClause(columnRealName,
+		cvalue.LessEqualLatestLocation, co))
 
 }
+
 var CK_LE *CK_LE_T
 var CK_LE_C *ConditionKey
 
@@ -338,13 +392,16 @@ type CK_ISN_T struct {
 	BaseConditionKey
 }
 
-func (w *CK_ISN_T) DoSetupConditionValue(cvalue *ConditionValue, value interface{}, location string, co *ConditionOption) {
+func (w *CK_ISN_T) DoSetupConditionValue(cvalue *ConditionValue,
+	value interface{}, location string, co *ConditionOption) {
 	cvalue.SetupIsNull()
 }
-func (w *CK_ISN_T) DoAddWhereClause(conditionList *List, columnRealName *ColumnRealName, cvalue *ConditionValue, co *ConditionOption) {
+func (w *CK_ISN_T) DoAddWhereClause(conditionList *List,
+	columnRealName *ColumnRealName, cvalue *ConditionValue, co *ConditionOption) {
 	conditionList.Add((*w.conditionKey).BuildBindClause(columnRealName, "", co))
 
 }
+
 var CK_ISN *CK_ISN_T
 var CK_ISN_C *ConditionKey
 
@@ -352,13 +409,16 @@ type CK_ISNN_T struct {
 	BaseConditionKey
 }
 
-func (w *CK_ISNN_T) DoSetupConditionValue(cvalue *ConditionValue, value interface{}, location string, co *ConditionOption) {
+func (w *CK_ISNN_T) DoSetupConditionValue(
+	cvalue *ConditionValue, value interface{}, location string, co *ConditionOption) {
 	cvalue.SetupIsNotNull()
 }
-func (w *CK_ISNN_T) DoAddWhereClause(conditionList *List, columnRealName *ColumnRealName, cvalue *ConditionValue, co *ConditionOption) {
+func (w *CK_ISNN_T) DoAddWhereClause(conditionList *List, columnRealName *ColumnRealName,
+	cvalue *ConditionValue, co *ConditionOption) {
 	conditionList.Add((*w.conditionKey).BuildBindClause(columnRealName, "", co))
 
 }
+
 var CK_ISNN *CK_ISNN_T
 var CK_ISNN_C *ConditionKey
 
@@ -366,15 +426,19 @@ type CK_ISNOE_T struct {
 	BaseConditionKey
 }
 
-func (w *CK_ISNOE_T) DoSetupConditionValue(cvalue *ConditionValue, value interface{}, location string, co *ConditionOption) {
+func (w *CK_ISNOE_T) DoSetupConditionValue(cvalue *ConditionValue, value interface{},
+	location string, co *ConditionOption) {
 	cvalue.SetupIsNullOrEmpty()
 }
-func (w *CK_ISNOE_T) DoAddWhereClause(conditionList *List, columnRealName *ColumnRealName, cvalue *ConditionValue, co *ConditionOption) {
-	sql := "(" + columnRealName.ToString() + " " + w.Operand + " or " + columnRealName.ToString() + " = '')"
+func (w *CK_ISNOE_T) DoAddWhereClause(conditionList *List, columnRealName *ColumnRealName,
+	cvalue *ConditionValue, co *ConditionOption) {
+	sql := "(" + columnRealName.ToString() + " " + w.Operand + " or " +
+		columnRealName.ToString() + " = '')"
 	sqc := CreateStringQueryClause(sql)
 	var qc QueryClause = sqc
 	conditionList.Add(&qc)
 }
+
 var CK_ISNOE *CK_ISNOE_T
 var CK_ISNOE_C *ConditionKey
 
@@ -382,13 +446,17 @@ type CK_LS_T struct {
 	BaseConditionKey
 }
 
-func (w *CK_LS_T) DoSetupConditionValue(cvalue *ConditionValue, value interface{}, location string, co *ConditionOption) {
+func (w *CK_LS_T) DoSetupConditionValue(cvalue *ConditionValue, value interface{},
+	location string, co *ConditionOption) {
 	cvalue.SetupLikeSearch(value, location, co)
 }
-func (w *CK_LS_T) DoAddWhereClause(conditionList *List, columnRealName *ColumnRealName, cvalue *ConditionValue, co *ConditionOption) {
-	conditionList.Add((*w.conditionKey).BuildBindClause(columnRealName, cvalue.LikeSearchLatestLocation, co))
+func (w *CK_LS_T) DoAddWhereClause(conditionList *List, columnRealName *ColumnRealName,
+	cvalue *ConditionValue, co *ConditionOption) {
+	conditionList.Add((*w.conditionKey).BuildBindClause(
+		columnRealName, cvalue.LikeSearchLatestLocation, co))
 
 }
+
 var CK_LS *CK_LS_T
 var CK_LS_C *ConditionKey
 
@@ -396,13 +464,17 @@ type CK_NLS_T struct {
 	BaseConditionKey
 }
 
-func (w *CK_NLS_T) DoSetupConditionValue(cvalue *ConditionValue, value interface{}, location string, co *ConditionOption) {
+func (w *CK_NLS_T) DoSetupConditionValue(cvalue *ConditionValue, value interface{},
+	location string, co *ConditionOption) {
 	cvalue.SetupNotLikeSearch(value, location, co)
 }
-func (w *CK_NLS_T) DoAddWhereClause(conditionList *List, columnRealName *ColumnRealName, cvalue *ConditionValue, co *ConditionOption) {
-	conditionList.Add((*w.conditionKey).BuildBindClause(columnRealName, cvalue.NotLikeSearchLatestLocation, co))
+func (w *CK_NLS_T) DoAddWhereClause(conditionList *List, columnRealName *ColumnRealName,
+	cvalue *ConditionValue, co *ConditionOption) {
+	conditionList.Add((*w.conditionKey).BuildBindClause(columnRealName,
+		cvalue.NotLikeSearchLatestLocation, co))
 
 }
+
 var CK_NLS *CK_NLS_T
 var CK_NLS_C *ConditionKey
 
@@ -410,9 +482,11 @@ type CK_GTISN_T struct {
 	CK_GT_T
 }
 
-func (w *CK_GTISN_T) BuildBindClause(columnRealName *ColumnRealName, location string, co *ConditionOption) *QueryClause {
+func (w *CK_GTISN_T) BuildBindClause(columnRealName *ColumnRealName, location string,
+	co *ConditionOption) *QueryClause {
 	return w.BuildBindClauseOrIsNull(columnRealName, location, co)
 }
+
 var CK_GTISN *CK_GTISN_T
 var CK_GTISN_C *ConditionKey
 
@@ -420,9 +494,11 @@ type CK_GEISN_T struct {
 	CK_GE_T
 }
 
-func (w *CK_GEISN_T) BuildBindClause(columnRealName *ColumnRealName, location string, co *ConditionOption) *QueryClause {
+func (w *CK_GEISN_T) BuildBindClause(columnRealName *ColumnRealName, location string,
+	co *ConditionOption) *QueryClause {
 	return w.BuildBindClauseOrIsNull(columnRealName, location, co)
 }
+
 var CK_GEISN *CK_GEISN_T
 var CK_GEISN_C *ConditionKey
 
@@ -430,9 +506,11 @@ type CK_LTISN_T struct {
 	CK_LT_T
 }
 
-func (w *CK_LTISN_T) BuildBindClause(columnRealName *ColumnRealName, location string, co *ConditionOption) *QueryClause {
+func (w *CK_LTISN_T) BuildBindClause(columnRealName *ColumnRealName, location string,
+	co *ConditionOption) *QueryClause {
 	return w.BuildBindClauseOrIsNull(columnRealName, location, co)
 }
+
 var CK_LTISN *CK_LTISN_T
 var CK_LTISN_C *ConditionKey
 
@@ -440,11 +518,34 @@ type CK_LEISN_T struct {
 	CK_LE_T
 }
 
-func (w *CK_LEISN_T) BuildBindClause(columnRealName *ColumnRealName, location string, co *ConditionOption) *QueryClause {
+func (w *CK_LEISN_T) BuildBindClause(columnRealName *ColumnRealName, location string,
+	co *ConditionOption) *QueryClause {
 	return w.BuildBindClauseOrIsNull(columnRealName, location, co)
 }
+
 var CK_LEISN *CK_LEISN_T
 var CK_LEISN_C *ConditionKey
+
+type CK_INS_T struct {
+	BaseConditionKey
+}
+
+func (w *CK_INS_T) DoSetupConditionValue(cvalue *ConditionValue, value interface{},
+	location string, co *ConditionOption) {
+	cvalue.SetupInScope(value, location)
+}
+func (w *CK_INS_T) DoAddWhereClause(conditionList *List, columnRealName *ColumnRealName,
+	cvalue *ConditionValue, co *ConditionOption) {
+	conditionList.Add((*w.conditionKey).BuildBindClause(columnRealName,
+		cvalue.InScopeLatestLocation, co))
+
+}
+func (w *CK_INS_T) GetBindVariableDummyValue() string {
+	return "('a1', 'a2')" // to indicate inScope
+}
+
+var CK_INS *CK_INS_T
+var CK_INS_C *ConditionKey
 
 type ColumnSqlName struct {
 	ColumnSqlName string
@@ -474,6 +575,7 @@ type ConditionValue struct {
 	LessEqualLatestLocation     string
 	LikeSearchLatestLocation    string
 	NotLikeSearchLatestLocation string
+	InScopeLatestLocation       string
 	EqualValueHandler           *StandardValueHandler
 	GreaterThanValueHandler     *StandardValueHandler
 	NotEqualValueHandler        *StandardValueHandler
@@ -485,6 +587,7 @@ type ConditionValue struct {
 	IsNullOrEmptyValueHandler   *StandardValueHandler
 	LikeSearchValueHandler      *VaryingValueHandler
 	NotLikeSearchValueHandler   *VaryingValueHandler
+	InScopeValueHandler         *VaryingValueHandler
 	Fixed                       map[string]map[string]interface{}
 	Varying                     map[string]map[string]interface{}
 	OrScopeQuery                bool
@@ -608,24 +711,28 @@ func (w *ConditionValue) SetupIsNullOrEmpty() {
 		w.IsNullOrEmptyValueHandler = CreateStandardValueHandler(w, &ck)
 	}
 }
-func (w *ConditionValue) SetupLikeSearch(value interface{}, location string, co *ConditionOption) {
+func (w *ConditionValue) SetupLikeSearch(
+	value interface{}, location string, co *ConditionOption) {
 	if w.LikeSearchValueHandler == nil {
 		var ck ConditionKey = CK_LS
 		w.LikeSearchValueHandler = CreateVaryingValueHandler(w, &ck)
 	}
 	var v string = value.(string)
 	log.InternalDebug("LikeSearch value :" + (*co).GenerateRealValue(v))
-	w.LikeSearchLatestLocation = location + "." + w.LikeSearchValueHandler.SetValue((*co).GenerateRealValue(v))
+	w.LikeSearchLatestLocation = location + "." +
+		w.LikeSearchValueHandler.SetValue((*co).GenerateRealValue(v))
 
 }
-func (w *ConditionValue) SetupNotLikeSearch(value interface{}, location string, co *ConditionOption) {
+func (w *ConditionValue) SetupNotLikeSearch(value interface{}, location string,
+	co *ConditionOption) {
 	if w.NotLikeSearchValueHandler == nil {
 		var ck ConditionKey = CK_LS
 		w.NotLikeSearchValueHandler = CreateVaryingValueHandler(w, &ck)
 	}
 	var v string = value.(string)
 	log.InternalDebug("LikeSearch value :" + (*co).GenerateRealValue(v))
-	w.NotLikeSearchLatestLocation = location + "." + w.NotLikeSearchValueHandler.SetValue((*co).GenerateRealValue(v))
+	w.NotLikeSearchLatestLocation = location + "." +
+		w.NotLikeSearchValueHandler.SetValue((*co).GenerateRealValue(v))
 
 }
 func (w *ConditionValue) GetFixedValue(ck *ConditionKey) interface{} {
@@ -633,6 +740,14 @@ func (w *ConditionValue) GetFixedValue(ck *ConditionKey) interface{} {
 		return nil
 	}
 	return w.Fixed[w.getFixedValueKey()][(*ck).GetConditionKeyS()]
+}
+func (w *ConditionValue) SetupInScope(value interface{}, location string) {
+	if w.InScopeValueHandler == nil {
+		var ck ConditionKey = CK_INS
+		w.InScopeValueHandler = CreateVaryingValueHandler(w, &ck)
+	}
+	w.InScopeLatestLocation = location + "." +
+		w.InScopeValueHandler.SetValue(value)
 }
 
 type VaryingValueHandler struct {
@@ -663,8 +778,9 @@ type StandardValueHandler struct {
 }
 
 func (w *StandardValueHandler) SetValue(value interface{}) string {
-	//Or Query非対応
-	//fmt.Printf("w.ConditionValue %v \n", w.ConditionValue)
+	if w.ConditionValue.OrScopeQuery{
+		return w.ConditionValue.SetupVaryingValue(w.ConditionKey, value)
+	}
 
 	return w.ConditionValue.SetupFixedValue(w.ConditionKey, value)
 }
@@ -673,7 +789,6 @@ func (w *StandardValueHandler) GetValue() interface{} {
 		return nil
 	}
 	if w.ConditionValue.OrScopeQuery {
-		//return w.getVaryingValue(w.ConditionKey)
 		panic("Get Value for VaryingValue 未実装")
 	} else {
 		return w.ConditionValue.GetFixedValue(w.ConditionKey)

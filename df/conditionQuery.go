@@ -21,6 +21,7 @@ import (
 	"fmt"
 	"github.com/mikeshimura/dbflute/log"
 	"reflect"
+	"strconv"
 	"strings"
 )
 
@@ -39,7 +40,62 @@ type BaseConditionQuery struct {
 	Inline         bool
 	OnClause       bool
 	CQ_PROPERTY    string
-	ConditionQuery interface{}
+	//ConditionQuery      interface{}
+	RelationPath        string
+	BaseCB              *ConditionBean
+	ForeignPropertyName string
+	ConditionQuery      *ConditionQuery
+}
+
+func (b *BaseConditionQuery) RegINS(key *ConditionKey, list *List,
+	cvalue *ConditionValue, columnDbName string) {
+	//       if (!isValidQueryChecked(key, value, cvalue, columnDbName)) {
+	//            return;
+	//        }
+	inScopeLimit := 0
+	if inScopeLimit > 0 && list.Size() > inScopeLimit {
+
+		//            // if the key is for inScope, it should be split as 'or'
+		//            // (if the key is for notInScope, it should be split as 'and')
+		orScopeQuery := (*b.SqlClause).IsOrScopeQueryEffective()
+		orScopeQueryAndPart := (*b.SqlClause).IsOrScopeQueryAndPartEffective()
+		needsAndPart := orScopeQuery && !orScopeQueryAndPart
+		needsAndPart = needsAndPart
+		//           if (b.isConditionKeyInScope(key)) {
+		//                // if or-scope query has already been effective, create new or-scope
+		//                xgetSqlClause().makeOrScopeQueryEffective();
+		//           } else {
+		//                if (needsAndPart) {
+		//                    xgetSqlClause().beginOrScopeQueryAndPart();
+		//                }
+		//            }
+		//
+		//            try {
+		//                // split the condition
+		//                @SuppressWarnings("unchecked")
+		//                final List<Object> objectList = (List<Object>) value;
+		//                final List<List<Object>> valueList = DfCollectionUtil.splitByLimit(objectList, inScopeLimit);
+		//                for (int i = 0; i < valueList.size(); i++) {
+		//                    final List<Object> currentValue = valueList.get(i);
+		//                    if (i == 0) {
+		//                        setupConditionValueAndRegisterWhereClause(key, currentValue, cvalue, columnDbName);
+		//                    } else {
+		//                        invokeQuery(columnDbName, key.getConditionKey(), currentValue);
+		//                    }
+		//                }
+		//            } finally {
+		//                if (isConditionKeyInScope(key)) {
+		//                    xgetSqlClause().closeOrScopeQuery();
+		//                } else {
+		//                    if (needsAndPart) {
+		//                        xgetSqlClause().endOrScopeQueryAndPart();
+		//                    }
+		//                }
+		//            }
+	} else {
+		b.SetupConditionValueAndRegisterWhereClause(key, list,
+			 cvalue, columnDbName)
+	}
 }
 
 func (b *BaseConditionQuery) FRES(value interface{}) interface{} {
@@ -83,7 +139,8 @@ func (b *BaseConditionQuery) CLSOP() *LikeSearchOption {
 	lso.LikePrefix()
 	return lso
 }
-func (b *BaseConditionQuery) RegROO(minNumber interface{}, maxNumber interface{}, cvalue *ConditionValue, col string, option *RangeOfOption) error {
+func (b *BaseConditionQuery) RegROO(minNumber interface{}, maxNumber interface{},
+	cvalue *ConditionValue, col string, option *RangeOfOption) error {
 	if option == nil {
 		return errors.New("RangeOfOption is nil")
 	}
@@ -127,7 +184,10 @@ func (b *BaseConditionQuery) RegROO(minNumber interface{}, maxNumber interface{}
 	}
 	return nil
 }
-func (b *BaseConditionQuery) RegLSQ(key *ConditionKey, value string, cvalue *ConditionValue, col string, option *LikeSearchOption) error {
+func (b *BaseConditionQuery) RegLSQ(
+	key *ConditionKey, value string, cvalue *ConditionValue,
+	col string, option *LikeSearchOption) error {
+
 	if option == nil {
 		panic("LikeSearchOption nil")
 	}
@@ -163,7 +223,8 @@ func (b *BaseConditionQuery) RegLSQ(key *ConditionKey, value string, cvalue *Con
 	return b.doRegisterLikeSearchQuerySplitBy(key, value, cvalue, col, option)
 
 }
-func (b *BaseConditionQuery) doRegisterLikeSearchQuerySplitBy(key *ConditionKey, value string, cvalue *ConditionValue, col string, option *LikeSearchOption) error {
+func (b *BaseConditionQuery) doRegisterLikeSearchQuerySplitBy(key *ConditionKey,
+	value string, cvalue *ConditionValue, col string, option *LikeSearchOption) error {
 	//      assertObjectNotNull("option(LikeSearchOption)", option);
 	// these values should be valid only (already filtered before)
 	// and invalid values are ignored even at the check mode
@@ -185,7 +246,8 @@ func (b *BaseConditionQuery) doRegisterLikeSearchQuerySplitBy(key *ConditionKey,
 		for i := 0; i < len(strArray); i++ {
 			currentValue := strArray[i]
 			var co ConditionOption = option
-			b.SetupConditionValueAndRegisterWhereClauseSub(key, currentValue, cvalue, col, &co)
+			b.SetupConditionValueAndRegisterWhereClauseSub(
+				key, currentValue, cvalue, col, &co)
 		}
 		//            } finally {
 		if needsAndPart {
@@ -207,11 +269,14 @@ func (b *BaseConditionQuery) doRegisterLikeSearchQuerySplitBy(key *ConditionKey,
 		}
 		//            try {
 		for i := 0; i < len(strArray); i++ {
+			//fmt.Println("i: ",i)
 			currentValue := strArray[i]
+			//fmt.Println("currentValue: ",currentValue)
 			var co ConditionOption = option
 			if i == 0 {
 
-				b.SetupConditionValueAndRegisterWhereClauseSub(key, currentValue, cvalue, col, &co)
+				b.SetupConditionValueAndRegisterWhereClauseSub(
+					key, currentValue, cvalue, col, &co)
 
 			} else {
 				b.invokeQueryLikeSearch(col, currentValue, option)
@@ -227,10 +292,12 @@ func (b *BaseConditionQuery) doRegisterLikeSearchQuerySplitBy(key *ConditionKey,
 
 	return nil
 }
-func (b *BaseConditionQuery) invokeQueryLikeSearch(col string, value interface{}, option interface{}) {
+func (b *BaseConditionQuery) invokeQueryLikeSearch(
+	col string, value interface{}, option interface{}) {
 	b.doInvokeQuery(col, "likeSearch", value, option)
 }
-func (b *BaseConditionQuery) doInvokeQuery(col string, ckey string, value interface{}, option interface{}) {
+func (b *BaseConditionQuery) doInvokeQuery(
+	col string, ckey string, value interface{}, option interface{}) {
 	//	      assertStringNotNullAndNotTrimmedEmpty("columnFlexibleName", colName);
 	//        assertStringNotNullAndNotTrimmedEmpty("conditionKeyName", ckey);
 	if value == nil {
@@ -240,7 +307,9 @@ func (b *BaseConditionQuery) doInvokeQuery(col string, ckey string, value interf
 	flexibleName := container.flexibleName
 	cq := container.cq
 	var dbmeta *DBMeta
-	bcq := reflect.ValueOf(cq).MethodByName("GetBaseConditionQuery").Call([]reflect.Value{})
+	var cqi interface{} = *cq
+	bcq := reflect.ValueOf(cqi).MethodByName("GetBaseConditionQuery").
+		Call([]reflect.Value{})
 	bcqx := (bcq[0].Interface()).(*BaseConditionQuery)
 	//fmt.Printf("bcq %v %T \n", bcqx, bcqx)
 	dbmeta = DBMetaProvider_I.TableDbNameInstanceMap[bcqx.TableDbName]
@@ -259,7 +328,8 @@ func (b *BaseConditionQuery) doInvokeQuery(col string, ckey string, value interf
 	var fromTo bool
 	fromTo = fromTo
 	ckeyl := strings.ToLower(ckey)
-	if ckeyl == "isnull" || ckeyl == "isnotnull" || ckeyl == "isnullorempty" || ckeyl == "emptystring" {
+	if ckeyl == "isnull" || ckeyl == "isnotnull" ||
+		ckeyl == "isnullorempty" || ckeyl == "emptystring" {
 		noArg = true
 	}
 	if ckeyl == "rangeof" {
@@ -282,7 +352,7 @@ func (b *BaseConditionQuery) doInvokeQuery(col string, ckey string, value interf
 	var param []reflect.Value = make([]reflect.Value, 2)
 	param[0] = reflect.ValueOf(value)
 	param[1] = reflect.ValueOf(option)
-	reflect.ValueOf(cq).MethodByName(methodName).Call(param)
+	reflect.ValueOf(cqi).MethodByName(methodName).Call(param)
 
 	//        final List<Class<?>> typeList = newArrayList();
 	//        if (fromTo) {
@@ -328,7 +398,8 @@ func (b *BaseConditionQuery) doInvokeQuery(col string, ckey string, value interf
 	//        }
 
 }
-func (b *BaseConditionQuery) xhelpExtractingPropertyNameCQContainer(col string) *PropertyNameCQContainer {
+func (b *BaseConditionQuery) xhelpExtractingPropertyNameCQContainer(
+	col string) *PropertyNameCQContainer {
 	//	        final String[] strings = name.split("\\.");
 	//        final int length = strings.length;
 	//        String propertyName = null;
@@ -366,7 +437,8 @@ func (b *BaseConditionQuery) IsBaseQuery() bool {
 	return b.ReferrerQuery == nil
 }
 
-func (b *BaseConditionQuery) RegQ(key *ConditionKey, value interface{}, cvalue *ConditionValue, col string) {
+func (b *BaseConditionQuery) RegQ(key *ConditionKey, value interface{},
+	cvalue *ConditionValue, col string) {
 	//fmt.Printf("RegQ col %s\n", col)
 	if b.IsValidQueryChecked(key, value, cvalue, col) == false {
 		return
@@ -374,31 +446,36 @@ func (b *BaseConditionQuery) RegQ(key *ConditionKey, value interface{}, cvalue *
 	b.SetupConditionValueAndRegisterWhereClause(key, value, cvalue, col)
 }
 
-func (b *BaseConditionQuery) SetupConditionValueAndRegisterWhereClause(key *ConditionKey, value interface{}, cvalue *ConditionValue, col string) {
+func (b *BaseConditionQuery) SetupConditionValueAndRegisterWhereClause(
+	key *ConditionKey, value interface{}, cvalue *ConditionValue, col string) {
 	eo := b.CreateEmbeddedOption(key, value, cvalue, col)
 	b.SetupConditionValueAndRegisterWhereClauseSub(key, value, cvalue, col, eo)
 
 }
 
-func (b *BaseConditionQuery) SetupConditionValueAndRegisterWhereClauseSub(key *ConditionKey, value interface{}, cvalue *ConditionValue, col string, co *ConditionOption) {
+func (b *BaseConditionQuery) SetupConditionValueAndRegisterWhereClauseSub(
+	key *ConditionKey, value interface{}, cvalue *ConditionValue,
+	col string, co *ConditionOption) {
 	dm := b.DBMetaProvider.TableDbNameInstanceMap[b.TableDbName]
 	cinfo := (*dm).GetColumnInfoByPropertyName(col)
 	pn := cinfo.PropertyName
 	un := InitUnCap(pn)
 	loc := b.XgetLocation(un)
 	log.InternalDebug(fmt.Sprintln("Location :" + loc))
-	(*key).SetupConditionValue(key, b.XcreateQueryModeProvider(), cvalue, value, loc, co)
+	(*key).SetupConditionValue(
+		key, b.XcreateQueryModeProvider(), cvalue, value, loc, co)
 	crn := b.ToColumnRealName(col, cinfo.ColumnSqlName)
 	usedAliasName := b.AliasName
 	(*b.SqlClause).RegisterWhereClause(crn, key, cvalue, co, usedAliasName)
 
 }
-func (b *BaseConditionQuery) ToColumnRealName(col string, csn *ColumnSqlName) *ColumnRealName {
+func (b *BaseConditionQuery) ToColumnRealName(
+	col string, csn *ColumnSqlName) *ColumnRealName {
 	var crn *ColumnRealName
 	if csn != nil {
 		crn = CreateColumnRealName(b.AliasName, csn)
 	} else {
-		dbmeta := b.DBMetaProvider.TableDbNameInstanceMap[b.TableDbName]
+		dbmeta := b.xgetLocalDBMeta()
 		log.InternalDebug(fmt.Sprintf("ToColumnRealName dbmeta %v \n", dbmeta))
 		cno := (*dbmeta).GetColumnInfoMap()[col]
 		ci := (*dbmeta).GetColumnInfoList().Get(cno)
@@ -412,25 +489,34 @@ func (b *BaseConditionQuery) XgetLocation(propertyName string) string {
 }
 func (b *BaseConditionQuery) XgetLocationBase() string {
 	res := ""
-
+	query := b
 	for {
-		if b.IsBaseQuery() {
+		if query.IsBaseQuery() {
 			res = b.GetCQProerty() + "." + res
 			break
+		} else {
+			foreignPropertyName := b.ForeignPropertyName
+			if foreignPropertyName == "" {
+				panic("The foreignPropertyName of the query should not be null:")
+			}
+			res = b.GetCQProerty() + InitCap(foreignPropertyName) + "." + res
 		}
-		//xgetForeignPropertyName
-		//////未実装
-		break
+		query = (*query.ReferrerQuery).GetBaseConditionQuery()
 
 	}
 	return res
 }
-func (b *BaseConditionQuery) IsValidQueryChecked(key *ConditionKey, value interface{}, cvalue *ConditionValue, col string) bool {
+func (b *BaseConditionQuery) IsValidQueryChecked(
+	key *ConditionKey, value interface{}, cvalue *ConditionValue, col string) bool {
 	return b.XdoIsValidQuery(key, value, cvalue, col, true)
 }
-func (b *BaseConditionQuery) XdoIsValidQuery(key *ConditionKey, value interface{}, cvalue *ConditionValue, col string, checked bool) bool {
+func (b *BaseConditionQuery) XdoIsValidQuery(
+	key *ConditionKey, value interface{}, cvalue *ConditionValue,
+	col string, checked bool) bool {
+
 	callerName := b.ToColumnRealName(col, nil) // logging only
-	if (*key).IsValidRegistration(b.XcreateQueryModeProvider(), cvalue, value, callerName) {
+	if (*key).IsValidRegistration(
+		b.XcreateQueryModeProvider(), cvalue, value, callerName) {
 		return true
 	} else {
 		if checked {
@@ -441,10 +527,13 @@ func (b *BaseConditionQuery) XdoIsValidQuery(key *ConditionKey, value interface{
 
 	return true
 }
-func (b *BaseConditionQuery) handleInvalidQuery(key *ConditionKey, value interface{}, col string) {
+func (b *BaseConditionQuery) handleInvalidQuery(
+	key *ConditionKey, value interface{}, col string) {
 	//not implemented yet
 }
-func (b *BaseConditionQuery) CreateEmbeddedOption(key *ConditionKey, value interface{}, cvalue *ConditionValue, col string) *ConditionOption {
+func (b *BaseConditionQuery) CreateEmbeddedOption(
+	key *ConditionKey, value interface{}, cvalue *ConditionValue,
+	col string) *ConditionOption {
 	return nil
 }
 func (b *BaseConditionQuery) RegOBA(col string) {
@@ -481,10 +570,79 @@ func (b *BaseConditionQuery) RegisterOrderBy(col string, ascDesc bool) {
 }
 func (b *BaseConditionQuery) XcreateQueryModeProvider() *QueryModeProvider {
 	qm := new(QueryModeProvider)
-	qm.IsInline = (*b.SqlClause).IsOrScopeQueryEffective()
+	qm.SqlClause = b.SqlClause
 	qm.IsInline = b.Inline
 	qm.IsOnClause = b.OnClause
 	return qm
+}
+func (b *BaseConditionQuery) ResolveNextRelationPath(
+	localTableName string, foreignPropertyName string) string {
+	relationNo := (*b.SqlClause).
+		ResolveRelationNo(localTableName, foreignPropertyName)
+	nextRelationPath := "_" + strconv.Itoa(relationNo)
+	if b.RelationPath != "" {
+		nextRelationPath = b.RelationPath + nextRelationPath
+	}
+	return nextRelationPath
+}
+func (b *BaseConditionQuery) ResolveJoinAliasName(relationPath string) string {
+	return (*b.SqlClause).ResolveJoinAliasName(relationPath)
+}
+
+func (b *BaseConditionQuery) RegisterOuterJoin(
+	foreignCQ *ConditionQuery, joinOnResourceMap map[string]string,
+	foreignPropertyName string) {
+
+	dbmeta := b.xgetLocalDBMeta()
+	foreignInfo := (*dbmeta).FindForeignInfo(foreignPropertyName)
+	//fmt.Printf("foreignInfo %v %T\n",foreignInfo,foreignInfo)
+	b.doRegisterOuterJoin(
+		foreignCQ, joinOnResourceMap, foreignPropertyName, foreignInfo)
+}
+func (b *BaseConditionQuery) doRegisterOuterJoin(
+	foreignCQ *ConditionQuery, joinOnResourceMap map[string]string,
+	foreignPropertyName string, foreignInfo *ForeignInfo) {
+
+	// translate join-on map using column real name
+	joinOnMap := make(map[*ColumnRealName]*ColumnRealName)
+	for key := range joinOnResourceMap {
+		local := key
+		foreign := joinOnResourceMap[key]
+		joinOnMap[b.ToColumnRealNameStr(local)] = (*foreignCQ).
+			GetBaseConditionQuery().ToColumnRealNameStr(foreign)
+	}
+	foreignAlias := (*foreignCQ).GetBaseConditionQuery().AliasName
+	foreignTable := (*foreignCQ).GetBaseConditionQuery().TableDbName
+	localAlias := b.AliasName
+	localTable := b.TableDbName
+	fixedCondition := foreignInfo.FixedCondition
+	fixedInline := foreignInfo.FixedInline
+	resolver := new(HpFixedConditionQueryResolver)
+	resolver.localCQ = b.ConditionQuery
+	resolver.foreignCQ = (*foreignCQ).GetBaseConditionQuery().ConditionQuery
+	var res FixedConditionResolver = resolver
+	resolver.Resolver = &res
+	if fixedInline {
+		//            xgetSqlClause().registerOuterJoinFixedInline(foreignAlias, foreignTable, localAlias, localTable // basic
+		//                    , joinOnMap, foreignInfo // join objects
+		//                    , fixedCondition, resolver); // fixed condition (to in-line view)
+
+		panic("")
+	} else { // normally here
+		(*b.SqlClause).RegisterOuterJoin(foreignAlias, foreignTable,
+			localAlias, localTable, joinOnMap, foreignInfo,
+			fixedCondition, resolver.Resolver)
+	}
+	// Not Implemented yet
+	//        xprepareFixedConditionDynamicParameterLazyChecker(foreignPropertyName, foreignInfo);
+}
+func (b *BaseConditionQuery) ToColumnRealNameStr(local string) *ColumnRealName {
+	dbmeta := b.xgetLocalDBMeta()
+	sqlName := ((*dbmeta).GetColumnInfoByPropertyName(local)).ColumnSqlName
+	return b.ToColumnRealName(local, sqlName)
+}
+func (b *BaseConditionQuery) xgetLocalDBMeta() *DBMeta {
+	return DBMetaProvider_I.TableDbNameInstanceMap[b.TableDbName]
 }
 
 type ColumnRealName struct {
@@ -495,7 +653,8 @@ type ColumnRealName struct {
 func (c *ColumnRealName) ToString() string {
 	return c.TableAliasName + "." + c.ColumnSqlName.ColumnSqlName
 }
-func CreateColumnRealName(aliasName string, columnSqlName *ColumnSqlName) *ColumnRealName {
+func CreateColumnRealName(
+	aliasName string, columnSqlName *ColumnSqlName) *ColumnRealName {
 	rn := new(ColumnRealName)
 	rn.TableAliasName = aliasName
 	rn.ColumnSqlName = columnSqlName
@@ -503,11 +662,15 @@ func CreateColumnRealName(aliasName string, columnSqlName *ColumnSqlName) *Colum
 }
 
 type QueryModeProvider struct {
-	IsOrScopeQuery bool
+	SqlClause *SqlClause
 	IsInline       bool
 	IsOnClause     bool
 }
+func (p *QueryModeProvider) IsOrScopeQuery() bool{
+	return (*p.SqlClause).IsOrScopeQueryEffective()
+}
+
 type PropertyNameCQContainer struct {
 	flexibleName string
-	cq           interface{}
+	cq           *ConditionQuery
 }
