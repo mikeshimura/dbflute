@@ -35,18 +35,6 @@ func SetTimeFormat(format string) {
 	timeFormat = format
 }
 
-func init() {
-	fmt.Println("Log Init")
-	logger, err := seelog.LoggerFromConfigAsFile(ConfigFile)
-
-	if err != nil {
-		fmt.Println("df006:fail to load log config")
-	}
-
-	seelog.ReplaceLogger(logger)
-
-}
-
 func InternalDebug(log string) {
 	if InternalDebugFlag==false{
 		return
