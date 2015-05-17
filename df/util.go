@@ -75,7 +75,9 @@ func (s *List) Get(i int) interface{} {
 func (s *List) Size() int {
 	return len(s.data)
 }
-
+func (s *List) GetAsArray() []interface{} {
+	return s.data
+}
 func GetType(o interface{}) string {
 	return fmt.Sprintf("%T", o)
 }
@@ -101,6 +103,9 @@ func (s *StringList) Get(i int) string {
 	} else {
 		return ""
 	}
+}
+func (s *StringList) GetAsArray() []string {
+	return s.data
 }
 func (s *StringList) Size() int {
 	return len(s.data)
