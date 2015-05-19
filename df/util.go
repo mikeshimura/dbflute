@@ -49,7 +49,11 @@ func (s *Stack) Pop() interface{} {
 	return value
 
 }
-
+func CreateList() *List {
+	l:=new(List)
+	l.data=make([]interface{}, 0, 100)
+	return l
+}
 type List struct {
 	data []interface{}
 }
@@ -81,7 +85,11 @@ func (s *List) GetAsArray() []interface{} {
 func GetType(o interface{}) string {
 	return fmt.Sprintf("%T", o)
 }
-
+func CreateStringList() *StringList {
+	l:=new(StringList)
+	l.data=make([]string, 0, 100)
+	return l
+}
 type StringList struct {
 	data []string
 }
