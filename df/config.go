@@ -19,7 +19,8 @@ import (
 	"database/sql"
 	"github.com/mikeshimura/dbflute/log"
 )
-var Bci *BehaviorCommandInvoker 
+
+var Bci *BehaviorCommandInvoker
 var DBCurrent_I *DBCurrent
 
 var LogStop bool
@@ -33,7 +34,7 @@ func DFErrorLog(logstr string) {
 	log.ErrorConv("dfLog", logstr)
 }
 
-func DbBegin(db *sql.DB) (*sql.Tx, error) {
+func TxBegin(db *sql.DB) (*sql.Tx, error) {
 	tx, err := db.Begin()
 	if err != nil {
 		DFErrorLog("Begin Transaction Error:" + err.Error())
@@ -42,6 +43,7 @@ func DbBegin(db *sql.DB) (*sql.Tx, error) {
 	DFLog("Begin Transaction")
 	return tx, err
 }
+
 func TxCommit(tx *sql.Tx) error {
 	err := tx.Commit()
 	if err != nil {
