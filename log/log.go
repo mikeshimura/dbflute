@@ -89,7 +89,7 @@ func CriticalConv(pack string, log string) {
 		" "+pack+":"+convErr(log))
 }
 func convErr(log string) string {
-	if charCode != "utf8" {
+	if charCode != "utf-8" {
 		res, _ := ConvertUtf(log,charCode)
 		return res
 	}
