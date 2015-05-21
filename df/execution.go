@@ -694,13 +694,21 @@ func (o *OutsideSqlBasicExecutor) SelectList(pmb interface{}, tx *sql.Tx) (bean 
 	return o.doSelectList(path, pmb, entityType, tx), err
 }
 func (o *OutsideSqlBasicExecutor) getFullPath(path string) string {
-	fullpath := filepath.Join(Gopath, "src", path)
-	files, _ := filepath.Glob(fullpath)
+	sqlPath:=os.Getenv("SQLPATH")
+	var sfullpath string
+	if sqlPath != "" {
+		pos:=strings.LastIndex(path,"/")
+		sfullpath = filepath.Join(sqlPath,path[pos:])
+	} else {
+	
+	sfullpath = filepath.Join(Gopath, "src", path)
+	}
+	files, _ := filepath.Glob(sfullpath)
 	//	fmt.Printf("files %v %T %d\n",files,files,len(files))
 	if len(files) == 0 {
-		panic("SQL File Not found. GOPATH NOT SET? " + fullpath)
+		panic("SQL File Not found. GOPATH NOT SET? " + sfullpath)
 	}
-	return fullpath
+	return sfullpath
 }
 func (o *OutsideSqlBasicExecutor) doSelectList(path string, pmb interface{}, entityType string, tx *sql.Tx) *ListResultBean {
 	//////////
