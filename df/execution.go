@@ -25,7 +25,8 @@ import (
 	"path/filepath"
 	"reflect"
 	//	"strconv"
-	//	"strings"
+	"os"
+	"strings"
 )
 
 const (
@@ -314,7 +315,7 @@ func (s *SelectCBExecution) newBasicParameterHandler(executedSql string) *Parame
 	handler.sql = executedSql
 	handler.statementFactory = s.StatementFactory
 	handler.ResultType = s.ResultType
-	handler.SqlClause=s.rc.SqlClause
+	handler.SqlClause = s.rc.SqlClause
 	var hand ParameterHandler = handler
 	return &hand
 }
@@ -339,9 +340,9 @@ func (s *SelectCBExecution) ExtractTwoWaySql(args []interface{}) string {
 	//	fmt.Printf("args %v \n",args[0])
 	cb := args[0]
 	cbbase := reflect.ValueOf(cb).Elem().FieldByName("BaseConditionBean").Interface()
-	
+
 	cbir := reflect.ValueOf(cbbase).MethodByName("GetSqlClause").Call([]reflect.Value{})
-	s.rc.SqlClause=cbir[0].Elem().Interface()
+	s.rc.SqlClause = cbir[0].Elem().Interface()
 	sqlcr := cbir[0].Elem().MethodByName("GetClause").Call([]reflect.Value{})
 	//return (*(*cb).GetSqlClause()).GetClause()
 	return sqlcr[0].String()
@@ -694,14 +695,14 @@ func (o *OutsideSqlBasicExecutor) SelectList(pmb interface{}, tx *sql.Tx) (bean 
 	return o.doSelectList(path, pmb, entityType, tx), err
 }
 func (o *OutsideSqlBasicExecutor) getFullPath(path string) string {
-	sqlPath:=os.Getenv("SQLPATH")
+	sqlPath := os.Getenv("SQLPATH")
 	var sfullpath string
 	if sqlPath != "" {
-		pos:=strings.LastIndex(path,"/")
-		sfullpath = filepath.Join(sqlPath,path[pos:])
+		pos := strings.LastIndex(path, "/")
+		sfullpath = filepath.Join(sqlPath, path[pos:])
 	} else {
-	
-	sfullpath = filepath.Join(Gopath, "src", path)
+
+		sfullpath = filepath.Join(Gopath, "src", path)
 	}
 	files, _ := filepath.Glob(sfullpath)
 	//	fmt.Printf("files %v %T %d\n",files,files,len(files))
