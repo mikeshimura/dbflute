@@ -35,7 +35,24 @@ type Numeric struct {
 	IntValue int64 //total value 10.50 -> 1050
 	DecPoint int   //decimal point numeric(10,2) -> 2
 }
+func CreateNumeric(value string) (*Numeric, error) {
+	var valuebu string = value
+	num := new(Numeric)
+	pos := strings.Index(value, ".")
+	if pos == -1 {
+		num.IntValue = 0
+	} else {
+		num.DecPoint = len(value) - pos -1
+		value = value[0:pos] + value[pos+1:]
+	}
 
+	cv, err := strconv.ParseInt(value, 10, 64)
+	if err != nil {
+		return nil, errors.New("Numericに変換出来ません:" + valuebu)
+	}
+	num.IntValue = cv
+	return num, nil
+}
 // Scan implements the Scanner interface.
 func (nn *Numeric) Scan(value interface{}) error {
 	if value == nil {
@@ -128,7 +145,17 @@ type NullNumeric struct {
 	DecPoint int   //decimal point numeric(10,2) -> 2
 	Valid    bool  // Valid is true if Value not null
 }
-
+func CreateNullNumeric(value string) (*NullNumeric, error) {
+	num,err:=CreateNumeric(value)
+	if err != nil{
+		return nil,err
+	}
+	nnum:=new(NullNumeric)
+	nnum.Valid=true
+	nnum.IntValue=num.IntValue
+	nnum.DecPoint=num.DecPoint
+	return nnum,nil
+}
 func (nn *NullNumeric) String() string {
 	if !nn.Valid {
 		return "null"
