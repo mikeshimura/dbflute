@@ -19,8 +19,8 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
-	"github.com/mikeshimura/dbflute/log"
 	"github.com/lib/pq"
+	"github.com/mikeshimura/dbflute/log"
 	"reflect"
 	"time"
 )
@@ -55,7 +55,7 @@ func (b *BaseBehavior) DoSelectCount(cb interface{},
 	if invres == nil {
 		return 0, err
 	}
-	res:=invres.(*ListResultBean)
+	res := invres.(*ListResultBean)
 	return (res.List.Get(0)).(*D_Int64).GetValue(), err
 }
 
@@ -363,12 +363,14 @@ func (t *TnStatementFactoryImpl) ModifyBindVariables(bindVariables *List,
 		if stype == "pq.NullTime" {
 			xtime := item.(pq.NullTime)
 			if xtime.Valid {
-			bindVariables.data[i] = xtime.Time.Format(C_DISP_SQL_DEFAULT_TIME_FORMAT)
+				bindVariables.data[i] = xtime.Time.Format(C_DISP_SQL_DEFAULT_TIME_FORMAT)
 			}
 		}
 		if stype == "*pq.NullTime" {
 			xtime := item.(*pq.NullTime)
-			bindVariables.data[i] = xtime.Time.Format(C_DISP_SQL_DEFAULT_TIME_FORMAT)
+			if xtime.Valid {
+				bindVariables.data[i] = xtime.Time.Format(C_DISP_SQL_DEFAULT_TIME_FORMAT)
+			}
 		}
 	}
 	return bindVariables
@@ -417,7 +419,7 @@ func (b *BhvUtil) AddEntity(ename string, ef func() *Entity) {
 }
 func (b *BhvUtil) GetListResultBean(rows *sql.Rows, entity string,
 	sqlClause interface{}) *ListResultBean {
-		
+
 	list := new(ListResultBean)
 	list.New()
 	for rows.Next() {
