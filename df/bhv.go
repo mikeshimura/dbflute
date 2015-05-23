@@ -20,7 +20,9 @@ import (
 	"errors"
 	"fmt"
 	"github.com/mikeshimura/dbflute/log"
+	"github.com/lib/pq"
 	"reflect"
+	"time"
 )
 
 type Behavior interface {
@@ -347,17 +349,28 @@ func (t *TnStatementFactoryImpl) ModifyBindVariables(bindVariables *List,
 	if bindVariables == nil {
 		return bindVariables
 	}
-	//convert df.NullString to sql.NullString
-	//	for i, item := range bindVariables.data {
-	//		stype := GetType(item)
-	//		if stype == "df.NullString" {
-	//			var dns NullString = item.(NullString)
-	//			ns := new(sql.NullString)
-	//			ns.Valid = dns.Valid
-	//			ns.String = dns.String
-	//			bindVariables.data[i] = ns
-	//		}
-	//	}
+	//convert time.Time to string
+	for i, item := range bindVariables.data {
+		stype := GetType(item)
+		if stype == "time.Time" {
+			xtime := item.(time.Time)
+			bindVariables.data[i] = xtime.Format(C_DISP_SQL_DEFAULT_TIME_FORMAT)
+		}
+		if stype == "*time.Time" {
+			xtime := item.(*time.Time)
+			bindVariables.data[i] = xtime.Format(C_DISP_SQL_DEFAULT_TIME_FORMAT)
+		}
+		if stype == "pq.NullTime" {
+			xtime := item.(pq.NullTime)
+			if xtime.Valid {
+			bindVariables.data[i] = xtime.Time.Format(C_DISP_SQL_DEFAULT_TIME_FORMAT)
+			}
+		}
+		if stype == "*pq.NullTime" {
+			xtime := item.(*pq.NullTime)
+			bindVariables.data[i] = xtime.Time.Format(C_DISP_SQL_DEFAULT_TIME_FORMAT)
+		}
+	}
 	return bindVariables
 }
 func (t *TnStatementFactoryImpl) PrepareStatement(orgSql string, tx *sql.Tx,
