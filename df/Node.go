@@ -454,6 +454,7 @@ func (b *BindVariableNode) getCommentType() *CommentType {
 	}
 	return CMT_0
 }
+
 func (b *BindVariableNode) bindList(ctx *CommandContext, list *List) {
 	(*ctx).addSql("(")
 	for validCount, currentElement := range list.data {

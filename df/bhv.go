@@ -460,7 +460,6 @@ func (b *BhvUtil) AddEntity(ename string, ef func() *Entity) {
 }
 func (b *BhvUtil) GetListResultBean(rows *sql.Rows, entity string,
 	sqlClause interface{}) *ListResultBean {
-
 	list := new(ListResultBean)
 	list.New()
 	for rows.Next() {
