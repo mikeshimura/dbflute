@@ -128,24 +128,24 @@ type BaseSqlClause struct {
 }
 
 func (b *BaseSqlClause) GetClauseQueryDelete() string {
-        dbmeta := b.DBMeta
-        sb := new(bytes.Buffer)
-        sb.WriteString("delete")
-        useQueryUpdateDirect := b.isUseQueryUpdateDirect(dbmeta)
-        whereClause := ""
-        if (useQueryUpdateDirect) { // prepare for direct case
-            whereClause = b.processSubQueryIndent(b.GetWhereClause());
-//            if (needsDeleteTableAliasHint(whereClause)) {
-//                sb.append(" ").append(getBasePointAliasName());
-//            }
-        }
-        sb.WriteString(" from "+(*dbmeta).GetTableSqlName().TableSqlName);
-        if (useQueryUpdateDirect) { // direct (in-scope unsupported or compound primary keys)
-            b.buildQueryUpdateDirectClause(nil,nil, whereClause, dbmeta, sb);
-        } else { // basically here
-            b.buildQueryUpdateInScopeClause(nil,nil, dbmeta, sb);
-        }
-        return sb.String();
+	dbmeta := b.DBMeta
+	sb := new(bytes.Buffer)
+	sb.WriteString("delete")
+	useQueryUpdateDirect := b.isUseQueryUpdateDirect(dbmeta)
+	whereClause := ""
+	if useQueryUpdateDirect { // prepare for direct case
+		whereClause = b.processSubQueryIndent(b.GetWhereClause())
+		//            if (needsDeleteTableAliasHint(whereClause)) {
+		//                sb.append(" ").append(getBasePointAliasName());
+		//            }
+	}
+	sb.WriteString(" from " + (*dbmeta).GetTableSqlName().TableSqlName)
+	if useQueryUpdateDirect { // direct (in-scope unsupported or compound primary keys)
+		b.buildQueryUpdateDirectClause(nil, nil, whereClause, dbmeta, sb)
+	} else { // basically here
+		b.buildQueryUpdateInScopeClause(nil, nil, dbmeta, sb)
+	}
+	return sb.String()
 	panic("GetClauseQueryDelete")
 	return ""
 }
@@ -334,10 +334,10 @@ func (b *BaseSqlClause) GetUnionWhereFirstConditionMark() string {
 func (b *BaseSqlClause) buildQueryUpdateSetClause(
 	columnParameterKey *StringList, columnParameterValue *StringList,
 	dbmeta *DBMeta, sb *bytes.Buffer, aliasName string) {
-	sb.WriteString(Ln)
-	if columnParameterKey==nil{
+	if columnParameterKey == nil {
 		return
 	}
+	sb.WriteString(Ln)
 	mapSize := columnParameterKey.Size()
 	for index, propertyName := range columnParameterKey.data {
 		parameter := columnParameterValue.Get(index)

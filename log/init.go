@@ -3,6 +3,8 @@ package log
 import (
 	"fmt"
 	"github.com/cihub/seelog"
+	"os"
+	"path/filepath"
 )
 
 func init() {
@@ -17,10 +19,26 @@ func init() {
 </seelog>
 `
 	fmt.Println("Log Init")
-	logger, err := seelog.LoggerFromConfigAsBytes([]byte(appConfig))
+	path := ""
+	logPath := os.Getenv("LOGPATH")
+	goPath := os.Getenv("GOPATH")
+	if len(logPath) > 0 {
+		path = logPath
+	} else {
+		path = goPath
+	}
+	fullpath := filepath.Join(path, "seelog.xml")
+	files, _ := filepath.Glob(fullpath)
+	var logger seelog.LoggerInterface
+	var err error
+	if len(files) > 0 {
+		logger, err = seelog.LoggerFromConfigAsFile(fullpath)
+	} else {
+		logger, err = seelog.LoggerFromConfigAsBytes([]byte(appConfig))
+	}
 
 	if err != nil {
-		fmt.Println("df006:fail to load log config")
+		fmt.Println("fail to load log config")
 	}
 
 	seelog.ReplaceLogger(logger)
