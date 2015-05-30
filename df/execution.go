@@ -450,6 +450,52 @@ func (t *TnAbstractEntityDynamicCommand) isOptimisticLockProperty(timestampProp 
 	return propertyName == timestampProp || propertyName == versionNoProp
 }
 
+type TnQueryDeleteDynamicCommand struct {
+	TnAbstractQueryDynamicCommand
+}
+
+func (t *TnQueryDeleteDynamicCommand) Execute(args []interface{}, tx *sql.Tx, behavior *Behavior) interface{} {
+	cb := args[0]
+	option := args[1]
+	argnames := []string{"pmb"}
+	argtypes := []string{GetType(cb)}
+	realArgs := []interface{}{cb}
+	twoWaySql := t.buildQueryDeleteTwoWaySql(cb, option, t.ResultType)
+	argnames = argnames
+	argtypes = argtypes
+	realArgs = realArgs
+	twoWaySql = twoWaySql
+	if twoWaySql == "" {
+		return int64(0)
+	}
+	creater := new(CommandContextCreator)
+	creater.argNames = argnames
+	creater.argTypes = argtypes
+	ctx := creater.createCommandContext(realArgs)
+	analyzer := new(SqlAnalyzer)
+	analyzer.Setup(twoWaySql, false)
+	node := analyzer.Analyze()
+	(*node).accept(ctx, nil)
+	handler := new(TnCommandContextHandler)
+	handler.CommandContext = ctx
+	handler.statementFactory = t.StatementFactory
+	res := handler.Execute(realArgs, tx, behavior)
+	return res
+}
+func (t *TnQueryDeleteDynamicCommand) buildQueryDeleteTwoWaySql(
+	cb interface{}, option interface{}, entityType string) string {
+	//	if option != null && option.isQueryDeleteForcedDirectAllowed() {
+	//		cb.getSqlClause().allowQueryUpdateForcedDirect()
+	//	}
+	cbbase := reflect.ValueOf(cb).Elem().FieldByName("BaseConditionBean").Interface()
+	cbir := reflect.ValueOf(cbbase).MethodByName("GetSqlClause").Call([]reflect.Value{})
+	//var SqlClause SqlClause =(cbir[0].Elem().Interface()).(SqlClause)
+	sqlcr := cbir[0].Elem().MethodByName("GetClauseQueryDelete").
+		Call([]reflect.Value{})
+	return sqlcr[0].String()
+
+}
+
 type TnQueryUpdateDynamicCommand struct {
 	TnAbstractQueryDynamicCommand
 }
@@ -482,7 +528,7 @@ func (t *TnQueryUpdateDynamicCommand) Execute(args []interface{}, tx *sql.Tx, be
 	handler := new(TnCommandContextHandler)
 	handler.CommandContext = ctx
 	handler.statementFactory = t.StatementFactory
-	res:=handler.Execute(realArgs, tx, behavior)
+	res := handler.Execute(realArgs, tx, behavior)
 	return res
 }
 func (t *TnQueryUpdateDynamicCommand) buildQueryUpdateTwoWaySql(
@@ -536,7 +582,7 @@ func (t *TnQueryUpdateDynamicCommand) buildQueryUpdateTwoWaySql(
 	//	if option != null && option.isQueryUpdateForcedDirectAllowed() {
 	//		cb.getSqlClause().allowQueryUpdateForcedDirect()
 	//	}
-	fmt.Printf("cb %v %T \n", cb, cb)
+	//fmt.Printf("cb %v %T \n", cb, cb)
 	cbbase := reflect.ValueOf(cb).Elem().FieldByName("BaseConditionBean").Interface()
 	cbir := reflect.ValueOf(cbbase).MethodByName("GetSqlClause").Call([]reflect.Value{})
 	sqlcr := cbir[0].Elem().MethodByName("GetClauseQueryUpdate").Call([]reflect.Value{

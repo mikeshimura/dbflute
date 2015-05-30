@@ -504,7 +504,31 @@ func (u *QueryUpdateCBCommand) createQueryUpdateDynamicCommand(
 func (u *QueryUpdateCBCommand) GetSqlExecutionArgument() []interface{} {
 	return []interface{}{u.entity, u.ConditionBean, u.option}
 }
-
+type QueryDeleteCBCommand struct {
+	AbstractQueryEntityCBCommand
+	option *DeleteOption
+	entityType string
+}
+func (s * QueryDeleteCBCommand) CreateSqlExecution(cb interface{}, entity interface{}) *SqlExecution {
+	dbmeta := DBMetaProvider_I.TableDbNameInstanceMap[s.entityType]
+	return s.createQueryEntityCBExecution(dbmeta)
+}
+func (s * QueryDeleteCBCommand) createQueryEntityCBExecution(dbmeta *DBMeta) *SqlExecution {
+	tnCommand := new(TnQueryDeleteDynamicCommand)
+	tnCommand.ResultType=s.entityType
+	tnCommand.StatementFactory=s.StatementFactory
+	var sqle SqlExecution = tnCommand
+	return &sqle
+}
+func (u *QueryDeleteCBCommand) GetCommandName() string {
+	return "queryDelete"
+}
+func (u *QueryDeleteCBCommand) GetSqlExecutionArgument() []interface{} {
+	return []interface{}{u.ConditionBean, u.option}
+}
+func (u *QueryDeleteCBCommand) BuildSqlExecutionKey() string{
+	return ""
+}
 type AbstractQueryEntityCBCommand struct {
 	BaseEntityCommand
 	ConditionBean interface{}

@@ -94,6 +94,22 @@ func (b *BaseBehavior) DoSelectNextVal(tx *sql.Tx) int64 {
 	var ent *D_Int64 = (res.List.Get(0)).(*D_Int64)
 	return ent.value
 }
+func (b *BaseBehavior) DoQueryDelete(cb interface{}, entityType string,
+	option *DeleteOption, tx *sql.Tx) (no int64, errrtn error) {
+	var err error
+	defer func() {
+		errx := recover()
+		if errx != nil {
+			errrtn = errors.New(errx.(string))
+		}
+	}()
+	var invres interface{}
+	invres = b.Invoke(b.createQueryDeleteCBCommand(cb, entityType, option, tx))
+	if invres == nil {
+		return 0, err
+	}
+	return invres.(int64), err
+}
 func (b *BaseBehavior) DoDelete(entity *Entity, option *DeleteOption,
 	tx *sql.Tx, ctx *Context) (no int64, errrtn error) {
 	var err error
@@ -133,7 +149,7 @@ func (b *BaseBehavior) DoQueryUpdate(entity *Entity, cb interface{},
 	}()
 	b.processBeforeQueryUpdate(entity, cb, option, ctx)
 	var invres interface{}
-	invres = b.Invoke(b.createQueryUpdateEntityCommand(entity, cb, option, tx))
+	invres = b.Invoke(b.createQueryUpdateCBCommand(entity, cb, option, tx))
 	if invres == nil {
 		return 0, err
 	}
@@ -188,9 +204,22 @@ func (b *BaseBehavior) createSelectNextValCommand(tx *sql.Tx) *BehaviorCommand {
 	var bc BehaviorCommand = cmd
 	return &bc
 }
-func (b *BaseBehavior) createQueryUpdateEntityCommand(entity *Entity, cb interface{}, option *UpdateOption,
-	tx *sql.Tx) *BehaviorCommand {
+func (b *BaseBehavior) createQueryDeleteCBCommand(cb interface{},
+	entityType string, option *DeleteOption, tx *sql.Tx) *BehaviorCommand {
+	cmd := new(QueryDeleteCBCommand)
+	cmd.entityType=entityType
+	cmd.StatementFactory = (*b.BehaviorCommandInvoker.InvokerAssistant).
+		GetStatementFactory()
+	var behavior BehaviorCommand = cmd
+	cmd.BehaviorCommand = &behavior
+	cmd.tx = tx
+	cmd.ConditionBean = cb
+	cmd.Behavior = b.Behavior
+	return &behavior
+}
 
+func (b *BaseBehavior) createQueryUpdateCBCommand(entity *Entity, cb interface{},
+	option *UpdateOption, tx *sql.Tx) *BehaviorCommand {
 	//	        assertBehaviorCommandInvoker("createUpdateEntityCommand");
 	cmd := new(QueryUpdateCBCommand)
 	cmd.StatementFactory = (*b.BehaviorCommandInvoker.InvokerAssistant).
@@ -202,8 +231,8 @@ func (b *BaseBehavior) createQueryUpdateEntityCommand(entity *Entity, cb interfa
 	cmd.Behavior = b.Behavior
 	b.xsetupEntityCommand(&cmd.BaseEntityCommand, entity, (*entity).AsTableDbName())
 	//        cmd.setUpdateOption(option);
-	var bcmd BehaviorCommand = cmd
-	return &bcmd
+	//var bcmd BehaviorCommand = cmd
+	return &behavior
 
 }
 func (b *BaseBehavior) createUpdateEntityCommand(entity *Entity, option *UpdateOption,

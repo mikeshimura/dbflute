@@ -79,6 +79,7 @@ type SqlClause interface {
 	CreateSelectHint() string
 	GetBaseSqlClause() *BaseSqlClause
 	GetClauseQueryUpdate(columnParameterKey *StringList, columnParameterValue *StringList) string
+	GetClauseQueryDelete() string
 }
 
 type BaseSqlClause struct {
@@ -126,6 +127,28 @@ type BaseSqlClause struct {
 	subQueryIndentProcessor            *SubQueryIndentProcessor
 }
 
+func (b *BaseSqlClause) GetClauseQueryDelete() string {
+        dbmeta := b.DBMeta
+        sb := new(bytes.Buffer)
+        sb.WriteString("delete")
+        useQueryUpdateDirect := b.isUseQueryUpdateDirect(dbmeta)
+        whereClause := ""
+        if (useQueryUpdateDirect) { // prepare for direct case
+            whereClause = b.processSubQueryIndent(b.GetWhereClause());
+//            if (needsDeleteTableAliasHint(whereClause)) {
+//                sb.append(" ").append(getBasePointAliasName());
+//            }
+        }
+        sb.WriteString(" from "+(*dbmeta).GetTableSqlName().TableSqlName);
+        if (useQueryUpdateDirect) { // direct (in-scope unsupported or compound primary keys)
+            b.buildQueryUpdateDirectClause(nil,nil, whereClause, dbmeta, sb);
+        } else { // basically here
+            b.buildQueryUpdateInScopeClause(nil,nil, dbmeta, sb);
+        }
+        return sb.String();
+	panic("GetClauseQueryDelete")
+	return ""
+}
 func (b *BaseSqlClause) GetClauseQueryUpdate(
 	columnParameterKey *StringList, columnParameterValue *StringList) string {
 	if columnParameterKey.Size() == 0 {
@@ -254,10 +277,8 @@ func (b *BaseSqlClause) buildQueryUpdateInScopeClause(
 
 	b.buildQueryUpdateSetClause(columnParameterKey, columnParameterValue, dbmeta, sb, "")
 	fmt.Println("sb:" + sb.String())
-	primaryKeyName := ((*dbmeta).GetPrimaryUniqueInfo().UniqueColumnList.Get(0)).
-	(*ColumnInfo).ColumnSqlName.ColumnSqlName
-	columnSqlName := ((*dbmeta).GetPrimaryUniqueInfo().UniqueColumnList.Get(0)).
-	(*ColumnInfo).ColumnSqlName.ColumnSqlName
+	primaryKeyName := ((*dbmeta).GetPrimaryUniqueInfo().UniqueColumnList.Get(0)).(*ColumnInfo).ColumnSqlName.ColumnSqlName
+	columnSqlName := ((*dbmeta).GetPrimaryUniqueInfo().UniqueColumnList.Get(0)).(*ColumnInfo).ColumnSqlName.ColumnSqlName
 	selectClause := "select " + b.GetBasePorintAliasName() + "." + columnSqlName
 	fromWhereClause := b.buildClauseFromWhereAsTemplate(false)
 	// Replace template marks. These are very important!
@@ -314,6 +335,9 @@ func (b *BaseSqlClause) buildQueryUpdateSetClause(
 	columnParameterKey *StringList, columnParameterValue *StringList,
 	dbmeta *DBMeta, sb *bytes.Buffer, aliasName string) {
 	sb.WriteString(Ln)
+	if columnParameterKey==nil{
+		return
+	}
 	mapSize := columnParameterKey.Size()
 	for index, propertyName := range columnParameterKey.data {
 		parameter := columnParameterValue.Get(index)
