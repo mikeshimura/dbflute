@@ -23,6 +23,7 @@ import (
 	"github.com/mikeshimura/dbflute/log"
 	"reflect"
 	"time"
+	//"runtime"
 )
 
 type Behavior interface {
@@ -42,7 +43,7 @@ func (b *BaseBehavior) DoSelectCount(cb interface{},
 	defer func() {
 		errx := recover()
 		if errx != nil {
-			errrtn = errors.New(errx.(string))
+			errrtn = errors.New(fmt.Sprintf("%v", errx))
 		}
 	}()
 	cbbase := reflect.ValueOf(cb).Elem().FieldByName("BaseConditionBean").Interface()
@@ -65,7 +66,7 @@ func (b *BaseBehavior) DoSelectList(cb interface{}, entityType string,
 	defer func() {
 		errx := recover()
 		if errx != nil {
-			errrtn = errors.New(errx.(string))
+			errrtn = errors.New(fmt.Sprintf("%v", errx))
 		}
 	}()
 	cmd := b.CreateSelectListCBCommand(cb, entityType, tx)
@@ -99,8 +100,10 @@ func (b *BaseBehavior) DoQueryDelete(cb interface{}, entityType string,
 	var err error
 	defer func() {
 		errx := recover()
+		tt := GetType(errx)
+		fmt.Println(tt)
 		if errx != nil {
-			errrtn = errors.New(errx.(string))
+			errrtn = errors.New(fmt.Sprintf("%v", errx))
 		}
 	}()
 	var invres interface{}
@@ -116,7 +119,7 @@ func (b *BaseBehavior) DoDelete(entity *Entity, option *DeleteOption,
 	defer func() {
 		errx := recover()
 		if errx != nil {
-			errrtn = errors.New(errx.(string))
+			errrtn = errors.New(fmt.Sprintf("%v", errx))
 		}
 	}()
 	b.processBeforeDelete(entity, option, tx, ctx)
@@ -130,7 +133,7 @@ func (b *BaseBehavior) DoInsert(entity *Entity, option *InsertOption,
 	defer func() {
 		errx := recover()
 		if errx != nil {
-			errrtn = errors.New(errx.(string))
+			errrtn = errors.New(fmt.Sprintf("%v", errx))
 		}
 	}()
 	b.processBeforeInsert(entity, option, tx, ctx)
@@ -144,7 +147,7 @@ func (b *BaseBehavior) DoQueryUpdate(entity *Entity, cb interface{},
 	defer func() {
 		errx := recover()
 		if errx != nil {
-			errrtn = errors.New(errx.(string))
+			errrtn = errors.New(fmt.Sprintf("%v", errx))
 		}
 	}()
 	b.processBeforeQueryUpdate(entity, cb, option, ctx)
@@ -161,7 +164,7 @@ func (b *BaseBehavior) DoUpdate(entity *Entity, option *UpdateOption,
 	defer func() {
 		errx := recover()
 		if errx != nil {
-			errrtn = errors.New(errx.(string))
+			errrtn = errors.New(fmt.Sprintf("%v", errx))
 		}
 	}()
 	b.processBeforeUpdate(entity, option, ctx)
@@ -207,7 +210,7 @@ func (b *BaseBehavior) createSelectNextValCommand(tx *sql.Tx) *BehaviorCommand {
 func (b *BaseBehavior) createQueryDeleteCBCommand(cb interface{},
 	entityType string, option *DeleteOption, tx *sql.Tx) *BehaviorCommand {
 	cmd := new(QueryDeleteCBCommand)
-	cmd.entityType=entityType
+	cmd.entityType = entityType
 	cmd.StatementFactory = (*b.BehaviorCommandInvoker.InvokerAssistant).
 		GetStatementFactory()
 	var behavior BehaviorCommand = cmd
@@ -448,7 +451,7 @@ func (t *TnStatementFactoryImpl) ModifyBindVariables(bindVariables *List,
 func (t *TnStatementFactoryImpl) PrepareStatement(orgSql string, tx *sql.Tx,
 	dbc *DBCurrent) *sql.Stmt {
 	sql := t.modifySql(orgSql, dbc)
-	fmt.Printf("sql %s tx %v %T\n", sql, tx, tx)
+	log.InternalDebug(fmt.Sprintf("sql %s \ntx %v %T\n", sql, tx, tx))
 	stmt, errs := tx.Prepare(sql)
 	if errs != nil {
 		panic(errs.Error() + ":" + sql)

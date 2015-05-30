@@ -838,8 +838,10 @@ func (o *OutsideSqlBasicExecutor) SelectList(pmb interface{}, tx *sql.Tx) (bean 
 	var err error
 	defer func() {
 		errx := recover()
+		tt := GetType(errx)
+		fmt.Println(tt)
 		if errx != nil {
-			errrtn = errors.New(errx.(string))
+			errrtn = errors.New(fmt.Sprintf("%v", errx))
 		}
 	}()
 	if pmb == nil {
