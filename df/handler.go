@@ -75,7 +75,7 @@ func (t *TnBasicUpdateHandler) execute(bindVariables *List, bindVariableTypes *S
 type TnBasicSelectHandler struct {
 	TnBasicParameterHandler
 	ResultType string
-	SqlClause interface{}
+	SqlClause  interface{}
 }
 
 func (t *TnBasicSelectHandler) execute(bindVariables *List, bindVariableTypes *StringList, tx *sql.Tx, behavior *Behavior) interface{} {
@@ -105,9 +105,9 @@ func (t *TnBasicSelectHandler) execute(bindVariables *List, bindVariableTypes *S
 	}
 
 	log.InternalDebug(fmt.Sprintln("ResultType:", t.ResultType))
-	rh:=new(ResultSetHandler)
+	rh := new(ResultSetHandler)
 	//l := BhvUtil_I.GetListResultBean(rows, t.ResultType,t.SqlClause)
-	l :=rh.GetListResultBean(rows, t.ResultType,t.SqlClause)
+	l := rh.GetListResultBean(rows, t.ResultType, t.SqlClause)
 	log.InternalDebug(fmt.Sprintln("result no:", l.List.Size()))
 	log.InternalDebug(fmt.Sprintf("data %v\n", l.List.Get(0)))
 	//        logSql(args, argTypes);
@@ -503,6 +503,38 @@ func (t *TnAbstractEntityHandler) addAutoUpdateWhereBindVariables(varList *List,
 	//        }
 	//}
 	//        setExceptionMessageSqlArgs(_bindVariables);
+}
+
+type TnCommandContextHandler struct {
+	TnAbstractBasicSqlHandler
+	CommandContext *CommandContext
+}
+
+func (p *TnCommandContextHandler) Execute(args []interface{}, tx *sql.Tx,behavior *Behavior)interface{} {
+
+	p.sql=(*p.CommandContext).getSql()
+//	fmt.Printf("getBindVariables %v\n",(*p.CommandContext).getBindVariables())
+//	p.logSql((*p.CommandContext).getBindVariables(),
+//		(*p.CommandContext).getBindVariableTypes())
+//	log.Flush()
+//	fmt.Printf("statementFactory %v \n",p.statementFactory)
+	bindVariables:=(*p.CommandContext).getBindVariables()
+	bindVariableTypes:=(*p.CommandContext).getBindVariableTypes()
+		dbc := (*(*behavior).GetBaseBehavior().GetBehaviorCommandInvoker().InvokerAssistant).GetDBCurrent()
+
+	ps := (*p.statementFactory).PrepareStatement(p.sql, tx, dbc)
+	defer ps.Close()
+	bindVar := (*p.statementFactory).ModifyBindVariables(bindVariables, bindVariableTypes)
+	p.logSql(bindVariables, bindVariableTypes)
+	log.Flush()
+	res, err := tx.Stmt(ps).Exec(bindVar.data...)
+	if err != nil {
+		panic(err.Error())
+	}
+
+	updateno, _ := res.RowsAffected()
+	log.InternalDebug(fmt.Sprintln("result no:", updateno))
+	return updateno
 }
 
 // TnBasicSelectHandler #ResultType @execute @logSql

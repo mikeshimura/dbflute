@@ -103,11 +103,7 @@ func (b *BaseBehavior) DoDelete(entity *Entity, option *DeleteOption,
 			errrtn = errors.New(errx.(string))
 		}
 	}()
-	res := b.processBeforeDelete(entity, option, tx, ctx)
-
-	if !res {
-		return 0, err
-	}
+	b.processBeforeDelete(entity, option, tx, ctx)
 	var invres interface{}
 	invres = b.Invoke(b.createDeleteEntityCommand(entity, option, tx))
 	return invres.(int64), err
@@ -118,17 +114,29 @@ func (b *BaseBehavior) DoInsert(entity *Entity, option *InsertOption,
 	defer func() {
 		errx := recover()
 		if errx != nil {
-			fmt.Printf("errx%v %T \n", errx, errx)
 			errrtn = errors.New(errx.(string))
 		}
 	}()
-	res := b.processBeforeInsert(entity, option, tx, ctx)
-
-	if !res {
-		return 0, err
-	}
+	b.processBeforeInsert(entity, option, tx, ctx)
 	var invres interface{}
 	invres = b.Invoke(b.createInsertEntityCommand(entity, option, tx))
+	return invres.(int64), err
+}
+func (b *BaseBehavior) DoQueryUpdate(entity *Entity, cb interface{},
+	option *UpdateOption, tx *sql.Tx, ctx *Context) (no int64, errrtn error) {
+	var err error
+	defer func() {
+		errx := recover()
+		if errx != nil {
+			errrtn = errors.New(errx.(string))
+		}
+	}()
+	b.processBeforeQueryUpdate(entity, cb, option, ctx)
+	var invres interface{}
+	invres = b.Invoke(b.createQueryUpdateEntityCommand(entity, cb, option, tx))
+	if invres == nil {
+		return 0, err
+	}
 	return invres.(int64), err
 }
 func (b *BaseBehavior) DoUpdate(entity *Entity, option *UpdateOption,
@@ -140,10 +148,8 @@ func (b *BaseBehavior) DoUpdate(entity *Entity, option *UpdateOption,
 			errrtn = errors.New(errx.(string))
 		}
 	}()
-	res := b.processBeforeUpdate(entity, option, ctx)
-	if !res {
-		return 0, err
-	}
+	b.processBeforeUpdate(entity, option, ctx)
+
 	var invres interface{}
 	invres = b.Invoke(b.createUpdateEntityCommand(entity, option, tx))
 	if invres == nil {
@@ -182,6 +188,24 @@ func (b *BaseBehavior) createSelectNextValCommand(tx *sql.Tx) *BehaviorCommand {
 	var bc BehaviorCommand = cmd
 	return &bc
 }
+func (b *BaseBehavior) createQueryUpdateEntityCommand(entity *Entity, cb interface{}, option *UpdateOption,
+	tx *sql.Tx) *BehaviorCommand {
+
+	//	        assertBehaviorCommandInvoker("createUpdateEntityCommand");
+	cmd := new(QueryUpdateCBCommand)
+	cmd.StatementFactory = (*b.BehaviorCommandInvoker.InvokerAssistant).
+		GetStatementFactory()
+	var behavior BehaviorCommand = cmd
+	cmd.BehaviorCommand = &behavior
+	cmd.tx = tx
+	cmd.ConditionBean = cb
+	cmd.Behavior = b.Behavior
+	b.xsetupEntityCommand(&cmd.BaseEntityCommand, entity, (*entity).AsTableDbName())
+	//        cmd.setUpdateOption(option);
+	var bcmd BehaviorCommand = cmd
+	return &bcmd
+
+}
 func (b *BaseBehavior) createUpdateEntityCommand(entity *Entity, option *UpdateOption,
 	tx *sql.Tx) *BehaviorCommand {
 
@@ -196,7 +220,7 @@ func (b *BaseBehavior) createUpdateEntityCommand(entity *Entity, option *UpdateO
 	return &bcmd
 }
 func (b *BaseBehavior) processBeforeDelete(entity *Entity, option *DeleteOption,
-	tx *sql.Tx, ctx *Context) bool {
+	tx *sql.Tx, ctx *Context) {
 
 	//        filterEntityOfDelete(entity, option);
 	//        assertEntityOfDelete(entity, option);
@@ -205,10 +229,9 @@ func (b *BaseBehavior) processBeforeDelete(entity *Entity, option *DeleteOption,
 	if !(*(*entity).GetDBMeta()).HasIdentity() {
 		b.assertEntityNotNullAndHasPrimaryKeyValue(entity)
 	}
-	return true
 }
 func (b *BaseBehavior) processBeforeInsert(entity *Entity, option *InsertOption,
-	tx *sql.Tx, ctx *Context) bool {
+	tx *sql.Tx, ctx *Context) {
 	//        assertEntityNotNull(entity); // primary key is checked later
 	//        frameworkFilterEntityOfInsert(entity, option);
 	//        filterEntityOfInsert(entity, option);
@@ -227,8 +250,6 @@ func (b *BaseBehavior) processBeforeInsert(entity *Entity, option *InsertOption,
 	if !(*(*entity).GetDBMeta()).HasIdentity() {
 		b.assertEntityNotNullAndHasPrimaryKeyValue(entity)
 	}
-
-	return true
 }
 func (b *BaseBehavior) frameworkFilterEntityOfDelete(entity *Entity,
 	option *DeleteOption, tx *sql.Tx, ctx *Context) {
@@ -264,27 +285,39 @@ func (b *BaseBehavior) injectSequenceToPrimaryKeyIfNeeds(entity *Entity,
 	SetEntityValue(entity, col.PropertyName, nextVal)
 	return
 }
+func (b *BaseBehavior) processBeforeQueryUpdate(entity *Entity, cb interface{},
+	option *UpdateOption, ctx *Context) {
+	b.assertEntityNotNull(entity)
+	b.frameworkFilterEntityOfUpdate(entity, option, ctx)
+
+}
 func (b *BaseBehavior) processBeforeUpdate(entity *Entity,
-	option *UpdateOption, ctx *Context) bool {
+	option *UpdateOption, ctx *Context) {
 	b.assertEntityNotNullAndHasPrimaryKeyValue(entity)
 	b.frameworkFilterEntityOfUpdate(entity, option, ctx)
 	//未実装
 	//        filterEntityOfUpdate(entity, option);
-	return true
+
 }
 func (b *BaseBehavior) frameworkFilterEntityOfUpdate(
 	entity *Entity, option *UpdateOption, ctx *Context) {
 	b.setupCommonColumnOfUpdateIfNeeds(entity, ctx)
+}
+func (b *BaseBehavior) assertEntityNotNull(entity *Entity) {
+	if entity == nil {
+		panic("Entity nil")
+	}
+	return
 }
 func (b *BaseBehavior) assertEntityNotNullAndHasPrimaryKeyValue(
 	entity *Entity) {
 	if entity == nil {
 		panic("Entity nil")
 	}
-	//通常はNULL TYPEで無いのでCK 不要
-	//	if !(*entity).HasPrimaryKeyValue() {
-	//		return errors.New("EntityPrimaryKeyNotFound")
-	//	}
+
+	if !(*entity).HasPrimaryKeyValue() {
+		panic("EntityPrimaryKeyNotFound")
+	}
 
 	//        b.assertEntityOfUpdate(entity, option);
 	return
@@ -372,13 +405,21 @@ func (t *TnStatementFactoryImpl) ModifyBindVariables(bindVariables *List,
 				bindVariables.data[i] = xtime.Time.Format(C_DISP_SQL_DEFAULT_TIME_FORMAT)
 			}
 		}
+		if stype == "df.Timestamp" {
+			xtime := item.(Timestamp)
+			bindVariables.data[i] = xtime.Timestamp.Format(C_DISP_SQL_DEFAULT_TIMESTAMP_FORMAT)
+		}
+		if stype == "*df.Timestamp" {
+			xtime := item.(*Timestamp)
+			bindVariables.data[i] = xtime.Timestamp.Format(C_DISP_SQL_DEFAULT_TIMESTAMP_FORMAT)
+		}
 	}
 	return bindVariables
 }
 func (t *TnStatementFactoryImpl) PrepareStatement(orgSql string, tx *sql.Tx,
 	dbc *DBCurrent) *sql.Stmt {
 	sql := t.modifySql(orgSql, dbc)
-	//fmt.Printf("sql %s tx %v %T\n", sql, tx, tx)
+	fmt.Printf("sql %s tx %v %T\n", sql, tx, tx)
 	stmt, errs := tx.Prepare(sql)
 	if errs != nil {
 		panic(errs.Error() + ":" + sql)

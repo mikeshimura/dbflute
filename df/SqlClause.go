@@ -34,6 +34,9 @@ const (
 	SelectClauseType_SUM            = 6
 	SelectClauseType_AVE            = 7
 	RELATION_PATH_DELIMITER         = "_"
+	SQIP_BEGIN_MARK_PREFIX          = "--#df:sqbegin#"
+	SQIP_END_MARK_PREFIX            = "--#df:sqend#"
+	SQIP_IDENTITY_TERMINAL          = "#df:idterm#"
 )
 
 type SqlClause interface {
@@ -75,6 +78,7 @@ type SqlClause interface {
 	CreateSqlSuffix() string
 	CreateSelectHint() string
 	GetBaseSqlClause() *BaseSqlClause
+	GetClauseQueryUpdate(columnParameterKey *StringList, columnParameterValue *StringList) string
 }
 
 type BaseSqlClause struct {
@@ -119,8 +123,232 @@ type BaseSqlClause struct {
 	fetchSize                          int
 	fetchPageNumber                    int
 	sqlClause                          *SqlClause
+	subQueryIndentProcessor            *SubQueryIndentProcessor
 }
-func (b *BaseSqlClause) GetBaseSqlClause() *BaseSqlClause{
+
+func (b *BaseSqlClause) GetClauseQueryUpdate(
+	columnParameterKey *StringList, columnParameterValue *StringList) string {
+	if columnParameterKey.Size() == 0 {
+		return ""
+	}
+
+	dbmeta := b.DBMeta
+	sb := new(bytes.Buffer)
+	sb.WriteString("update " + (*dbmeta).GetTableSqlName().TableSqlName)
+
+	if b.isUseQueryUpdateDirect(dbmeta) { // direct (in-scope unsupported or compound primary keys)
+		whereClause := b.processSubQueryIndent(b.GetWhereClause())
+		b.buildQueryUpdateDirectClause(columnParameterKey,
+			columnParameterValue, whereClause, dbmeta, sb)
+	} else { // basically here
+		b.buildQueryUpdateInScopeClause(columnParameterKey,
+			columnParameterValue, dbmeta, sb)
+	}
+	return sb.String()
+
+}
+func (b *BaseSqlClause) GetWhereClause() string {
+	//
+	//	        reflectClauseLazilyIfExists();
+	sb := new(bytes.Buffer)
+	b.BuildWhereClause(sb)
+	return sb.String()
+}
+func (b *BaseSqlClause) processSubQueryIndent(sql string) string {
+	return b.getSubQueryIndentProcessor().processSubQueryIndent(sql, "", sql)
+}
+func (b *BaseSqlClause) getSubQueryIndentProcessor() *SubQueryIndentProcessor {
+	if b.subQueryIndentProcessor == nil {
+		b.subQueryIndentProcessor = new(SubQueryIndentProcessor)
+	}
+	return b.subQueryIndentProcessor
+}
+func (b *BaseSqlClause) isUseQueryUpdateDirect(dbmeta *DBMeta) bool {
+	//return _queryUpdateForcedDirectAllowed || !canUseQueryUpdateInScope(dbmeta);
+	return !b.canUseQueryUpdateInScope(dbmeta)
+}
+func (b *BaseSqlClause) canUseQueryUpdateInScope(dbmeta *DBMeta) bool {
+	return b.isUpdateSubQueryUseLocalTableSupported() && !(*dbmeta).HasCompoundPrimaryKey()
+}
+
+func (b *BaseSqlClause) isUpdateSubQueryUseLocalTableSupported() bool {
+	return true
+}
+func (b *BaseSqlClause) buildQueryUpdateDirectClause(
+	columnParameterKey *StringList, columnParameterValue *StringList,
+	whereClause string, dbmeta *DBMeta, sb *bytes.Buffer) {
+	//        if (hasUnionQuery()) {
+	//            throwQueryUpdateUnavailableFunctionException("union", dbmeta);
+	//        }
+	useAlias := false
+	//if (b.isUpdateTableAliasNameSupported()) {
+	//            if (hasQueryUpdateSubQueryPossible(whereClause)) {
+	//                useAlias = true;
+	//            }
+	//} else {
+	//            if (hasQueryUpdateSubQueryPossible(whereClause)) {
+	//                throwQueryUpdateUnavailableFunctionException("sub-query", dbmeta);
+	//            }
+	//    }
+	directJoin := false
+	//        if (isUpdateDirectJoinSupported()) {
+	//            if (hasOuterJoin()) {
+	//                useAlias = true; // use alias forcedly if direct join
+	//                directJoin = true;
+	//            }
+	//        } else { // direct join unsupported
+	if b.hasOuterJoin() {
+		panic("QueryUpdateUnavailableFunction")
+	}
+	//        }
+	basePointAliasName := ""
+	if useAlias {
+		basePointAliasName = b.GetBasePorintAliasName()
+	}
+	//
+	if useAlias {
+		sb.WriteString(" " + basePointAliasName)
+	}
+	directJoin = directJoin
+	//        if (directJoin) {
+	//            sb.WriteString(b.GetLeftOuterJoinClause());
+	//        }
+	if columnParameterKey != nil {
+		//            final String setClauseAliasName = useAlias ? basePointAliasName + "." : null;
+		setClauseAliasName := ""
+		b.buildQueryUpdateSetClause(columnParameterKey, columnParameterValue, dbmeta, sb, setClauseAliasName)
+	}
+	if len(strings.Trim(whereClause, " ")) == 0 {
+		return
+	}
+
+	//        if (useAlias) {
+	//            sb.append(whereClause);
+	//        } else {
+	sb.WriteString(b.filterQueryUpdateBasePointAliasNameLocalUnsupported(whereClause))
+	fmt.Println("sb:" + sb.String())
+
+	panic("buildQueryUpdateDirectClause")
+
+}
+func (b *BaseSqlClause) filterQueryUpdateBasePointAliasNameLocalUnsupported(
+	subQuery string) string {
+	// remove table alias prefix for column
+	subQuery = strings.Replace(subQuery, b.GetBasePorintAliasName()+".", "", -1)
+
+	// remove table alias definition
+	tableAliasSymbol := " " + b.GetBasePorintAliasName()
+	subQuery = strings.Replace(subQuery, tableAliasSymbol+" ", " ", -1)
+	subQuery = strings.Replace(subQuery, tableAliasSymbol+Ln, Ln, -1)
+	if subQuery[len(subQuery)-len(tableAliasSymbol):] == tableAliasSymbol {
+		subQuery = strings.Replace(subQuery, tableAliasSymbol, "", -1)
+	}
+	return subQuery
+}
+func (b *BaseSqlClause) hasOuterJoin() bool {
+	return b.outerJoinMap != nil && len(b.outerJoinMap) > 0
+}
+func (b *BaseSqlClause) buildQueryUpdateInScopeClause(
+	columnParameterKey *StringList, columnParameterValue *StringList,
+	dbmeta *DBMeta, sb *bytes.Buffer) {
+
+	b.buildQueryUpdateSetClause(columnParameterKey, columnParameterValue, dbmeta, sb, "")
+	fmt.Println("sb:" + sb.String())
+	primaryKeyName := ((*dbmeta).GetPrimaryUniqueInfo().UniqueColumnList.Get(0)).
+	(*ColumnInfo).ColumnSqlName.ColumnSqlName
+	columnSqlName := ((*dbmeta).GetPrimaryUniqueInfo().UniqueColumnList.Get(0)).
+	(*ColumnInfo).ColumnSqlName.ColumnSqlName
+	selectClause := "select " + b.GetBasePorintAliasName() + "." + columnSqlName
+	fromWhereClause := b.buildClauseFromWhereAsTemplate(false)
+	// Replace template marks. These are very important!
+	fromWhereClause = strings.Replace(fromWhereClause, b.GetUnionSelectClauseMark(), selectClause, -1)
+	fromWhereClause = strings.Replace(fromWhereClause, b.GetUnionWhereClauseMark(), "", -1)
+	fromWhereClause = strings.Replace(fromWhereClause, b.GetUnionWhereFirstConditionMark(), "", -1)
+	subQuery := b.processSubQueryIndent(selectClause + " " + fromWhereClause)
+	sb.WriteString(Ln + " where " + primaryKeyName + " in (" + Ln + subQuery)
+	if subQuery[len(subQuery)-len(Ln):] != Ln {
+		sb.WriteString(Ln)
+	}
+	sb.WriteString(")")
+}
+func (b *BaseSqlClause) buildClauseFromWhereAsTemplate(template bool) string {
+	sb := new(bytes.Buffer)
+	b.BuildFromClause(sb)
+	sb.WriteString((*b.sqlClause).CreateFromHint())
+	b.BuildWhereClauseSub(sb, template)
+	sb.WriteString(b.prepareUnionClause(b.GetUnionSelectClauseMark()))
+	return sb.String()
+}
+func (b *BaseSqlClause) prepareUnionClause(selectClause string) string {
+	if !b.hasUnionQuery() {
+		return ""
+	}
+	panic("union not implemented yet")
+	//sb := new(bytes.Buffer)
+	//        for (UnionQueryInfo unionQueryInfo : _unionQueryInfoList) {
+	//            final UnionClauseProvider unionClauseProvider = unionQueryInfo.getUnionClauseProvider();
+	//            final String unionQueryClause = unionClauseProvider.provide();
+	//            final boolean unionAll = unionQueryInfo.isUnionAll();
+	//            sb.append(ln()).append(unionAll ? " union all " : " union ").append(ln());
+	//            sb.append(selectClause).append(" ").append(unionQueryClause);
+	//        }
+	//        return sb.toString();
+	return ""
+}
+func (b *BaseSqlClause) hasUnionQuery() bool {
+	return b.unionQueryInfoList != nil && b.unionQueryInfoList.Size() > 0
+}
+func (b *BaseSqlClause) GetUnionSelectClauseMark() string {
+	return "#df:unionSelectClause#"
+}
+func (b *BaseSqlClause) GetWhereClauseMark() string {
+	return "#df:whereClause#"
+}
+func (b *BaseSqlClause) GetUnionWhereClauseMark() string {
+	return "#df:unionWhereClause#"
+}
+func (b *BaseSqlClause) GetUnionWhereFirstConditionMark() string {
+	return "#df:unionWhereFirstCondition#"
+}
+func (b *BaseSqlClause) buildQueryUpdateSetClause(
+	columnParameterKey *StringList, columnParameterValue *StringList,
+	dbmeta *DBMeta, sb *bytes.Buffer, aliasName string) {
+	sb.WriteString(Ln)
+	mapSize := columnParameterKey.Size()
+	for index, propertyName := range columnParameterKey.data {
+		parameter := columnParameterValue.Get(index)
+		isVersionColumn, versionParameter := b.checkVersionColumn(parameter)
+		fmt.Println("propertyName" + propertyName)
+		columnInfo := (*dbmeta).GetColumnInfoByPropertyName(propertyName)
+		columnSqlName := columnInfo.ColumnSqlName.ColumnSqlName
+		if index == 0 {
+			sb.WriteString("   set ")
+		} else {
+			sb.WriteString("     , ")
+		}
+		if aliasName != "" {
+			sb.WriteString(aliasName)
+		}
+		sb.WriteString(columnSqlName + " = ")
+		valueExp := ""
+		if isVersionColumn {
+			valueExp = aliasName + versionParameter
+		} else {
+			valueExp = parameter
+		}
+		sb.WriteString(valueExp)
+		if mapSize-1 > index { // before last loop
+			sb.WriteString(Ln)
+		}
+	}
+}
+func (b *BaseSqlClause) checkVersionColumn(columnName string) (bool, string) {
+	if columnName[0:9] == ":Version:" {
+		return true, columnName[9:]
+	}
+	return false, ""
+}
+func (b *BaseSqlClause) GetBaseSqlClause() *BaseSqlClause {
 	return b
 }
 func (b *BaseSqlClause) FetchFirst(fetchSize int) {
@@ -480,9 +708,7 @@ func (b *BaseSqlClause) canPagingCountLeastJoin() bool {
 func (b *BaseSqlClause) isSelectClauseTypeNonUnionCount() bool {
 	return !b.hasUnionQuery() && b.selectClauseType.count
 }
-func (b *BaseSqlClause) hasUnionQuery() bool {
-	return b.unionQueryInfoList != nil && b.unionQueryInfoList.Size() > 0
-}
+
 func (b *BaseSqlClause) hasFixedConditionOverRelationJoin() bool {
 	for key := range b.outerJoinMap {
 		joinInfo := b.outerJoinMap[key]
@@ -680,29 +906,29 @@ func (b *BaseSqlClause) getInlineViewClause(inlineTableSqlName *TableSqlName, in
 func (b *BaseSqlClause) hasBaseTableInlineWhereClause() bool {
 	return b.BaseTableInlineWhereList != nil && b.BaseTableInlineWhereList.Size() > 0
 }
-func (b *BaseSqlClause) isSelectClauseNonUnionScalar() bool{
+func (b *BaseSqlClause) isSelectClauseNonUnionScalar() bool {
 	return !b.hasUnionQuery() && b.isSelectClauseTypeScalar()
 }
-func (b *BaseSqlClause) isSelectClauseTypeScalar() bool{
+func (b *BaseSqlClause) isSelectClauseTypeScalar() bool {
 	return b.selectClauseType != nil && b.selectClauseType.scalar
 }
 func (b *BaseSqlClause) isSelectClauseTypeCount() bool {
 	return b.selectClauseType.count
 }
-func (b *BaseSqlClause) buildSelectClauseCount() string{
+func (b *BaseSqlClause) buildSelectClauseCount() string {
 	return "select count(*)"
 }
-func (b *BaseSqlClause) buildSelectClauseScalar(aliasName string) string{
-        if (b.isSelectClauseTypeCount()) {
-            return b.buildSelectClauseCount()
-        } 
-        panic("System Error Not Implemented Yet. buildSelectClauseScalar")
+func (b *BaseSqlClause) buildSelectClauseScalar(aliasName string) string {
+	if b.isSelectClauseTypeCount() {
+		return b.buildSelectClauseCount()
+	}
+	panic("System Error Not Implemented Yet. buildSelectClauseScalar")
 }
 func (b *BaseSqlClause) GetSelectClause() string {
 	//	        reflectClauseLazilyIfExists();
-	        if (b.isSelectClauseNonUnionScalar()) {
-	            return b.buildSelectClauseScalar(b.BasePorintAliasName)
-	        }
+	if b.isSelectClauseNonUnionScalar() {
+		return b.buildSelectClauseScalar(b.BasePorintAliasName)
+	}
 	//        // if it's a scalar-select, it always has union-query since here
 	//        final StringBuilder sb = new StringBuilder();
 	//
@@ -1193,11 +1419,12 @@ type OrScopeQueryClauseListProvider interface {
 }
 type BaseOrScopeQueryClauseListProvider struct {
 }
+
 func (p *BaseOrScopeQueryClauseListProvider) provide(
-	tmpOrScopeQueryInfo *OrScopeQueryInfo) interface{}{
+	tmpOrScopeQueryInfo *OrScopeQueryInfo) interface{} {
 	//Dummy implementation
-	return nil		
-	}
+	return nil
+}
 func (p *BaseOrScopeQueryClauseListProvider) provideAlias(
 	tmpOrScopeQueryInfo *OrScopeQueryInfo, aliasName string) interface{} {
 	//Dummy implementation
@@ -1286,7 +1513,7 @@ func (o *OrScopeQueryReflector) reflectTmpOrClauseToRealObject(localInfo *OrScop
 		wl3 := new(OrScopeQueryClauseListProviderOuterJoinInlineClauseList)
 		var oc3 OrScopeQueryClauseListProvider = wl3
 		groupList2 := new(List)
-		temp2 := (o.setupTmpOrListListAlias(localInfo,aliasName, &oc3)).(*List)
+		temp2 := (o.setupTmpOrListListAlias(localInfo, aliasName, &oc3)).(*List)
 		for _, temp := range temp2.data {
 			//fmt.Printf("groupList2 %v %T\n", temp, temp)
 			var tlist *OrScopeQueryClauseGroup = temp.(*OrScopeQueryClauseGroup)
@@ -1651,4 +1878,97 @@ func (p *SelectedRelationColumn) BuildRealColumnSqlName() string {
 	} else {
 		return columnSqlName.ColumnSqlName
 	}
+}
+
+type SubQueryIndentProcessor struct {
+}
+
+func (p *SubQueryIndentProcessor) processSubQueryIndent(
+	sql string, preIndent string, originalSql string) string {
+	// /= = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = =
+	// it's a super core logic for formatting SQL generated by ConditionBean
+	// = = = = = = = = = =/
+	beginMarkPrefix := SQIP_BEGIN_MARK_PREFIX
+	if !strings.Contains(sql, beginMarkPrefix) {
+		return sql
+	}
+	panic("processSubQueryIndent not implemented yet")
+	//	lines := strings.Split(sql, Ln)
+	//	endMarkPrefix := SQIP_END_MARK_PREFIX
+	//	identityTerminal := SQIP_IDENTITY_TERMINAL
+	//	terminalLength := len(identityTerminal)
+	//	mainSb := new(bytes.Buffer)
+	//	var subSb *bytes.Buffer = nil
+	//	throughBegin := false
+	//	throughBeginFirst := false
+	//	subQueryIdentity := ""
+	//	indent := ""
+	//	for _, line := range lines {
+	//            if (!throughBegin) {
+	//                if (line.contains(beginMarkPrefix)) { // begin line
+	//                    throughBegin = true;
+	//                    subSb = new StringBuilder();
+	//                    final int markIndex = line.indexOf(beginMarkPrefix);
+	//                    final int terminalIndex = line.indexOf(identityTerminal);
+	//                    if (terminalIndex < 0) {
+	//                        String msg = "Identity terminal was not found at the begin line: [" + line + "]";
+	//                        throw new SubQueryIndentFailureException(msg);
+	//                    }
+	//                    final String clause = line.substring(0, markIndex) + line.substring(terminalIndex + terminalLength);
+	//                    subQueryIdentity = line.substring(markIndex + beginMarkPrefix.length(), terminalIndex);
+	//                    subSb.append(clause);
+	//                    indent = buildSpaceBar(markIndex - preIndent.length());
+	//                } else { // normal line
+	//                    if (needsLineConnection(mainSb)) {
+	//                        mainSb.append(ln());
+	//                    }
+	//                    mainSb.append(line).append(ln());
+	//                }
+	//            } else {
+	//                // - - - - - - - -
+	//                // In begin to end
+	//                // - - - - - - - -
+	//                if (line.contains(endMarkPrefix + subQueryIdentity)) { // end line
+	//                    final int markIndex = line.indexOf(endMarkPrefix);
+	//                    final int terminalIndex = line.indexOf(identityTerminal);
+	//                    if (terminalIndex < 0) {
+	//                        String msg = "Identity terminal was not found at the begin line: [" + line + "]";
+	//                        throw new SubQueryIndentFailureException(msg);
+	//                    }
+	//                    final String clause = line.substring(0, markIndex);
+	//                    // e.g. " + 1" of ColumnQuery calculation for right column
+	//                    final String preRemainder = line.substring(terminalIndex + terminalLength);
+	//                    subSb.append(clause);
+	//                    final String subQuerySql = subSb.toString();
+	//                    final String nestedPreIndent = preIndent + indent;
+	//                    final String currentSql = processSubQueryIndent(subQuerySql, nestedPreIndent, originalSql);
+	//                    if (needsLineConnection(mainSb)) {
+	//                        mainSb.append(ln());
+	//                    }
+	//                    mainSb.append(currentSql);
+	//                    if (Srl.is_NotNull_and_NotTrimmedEmpty(preRemainder)) {
+	//                        mainSb.append(preRemainder);
+	//                    }
+	//                    throughBegin = false;
+	//                    throughBeginFirst = false;
+	//                } else { // scope line
+	//                    if (!throughBeginFirst) {
+	//                        subSb.append(line.trim()).append(ln());
+	//                        throughBeginFirst = true;
+	//                    } else {
+	//                        subSb.append(indent).append(line).append(ln());
+	//                    }
+	//                }
+	//            }
+	//}
+	//        final String filteredSql = Srl.rtrim(mainSb.toString()); // removed latest line separator
+	//        if (throughBegin) {
+	//            throwSubQueryNotFoundEndMarkException(subQueryIdentity, sql, filteredSql, originalSql);
+	//        }
+	//        if (filteredSql.contains(beginMarkPrefix)) {
+	//            throwSubQueryAnyBeginMarkNotHandledException(subQueryIdentity, sql, filteredSql, originalSql);
+	//        }
+	//        return filteredSql;
+	panic("")
+	return "processSubQueryInden"
 }

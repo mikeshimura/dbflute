@@ -34,9 +34,9 @@ type Node interface {
 	AddChild(node interface{})
 	GetChildSize() int
 	GetChild(i int) *Node
-	accept(ctx *CommandContext, node *Node) 
+	accept(ctx *CommandContext, node *Node)
 	getCommentType() *CommentType
-	doProcess(ctx *CommandContext, valueAndType *ValueAndType, loopInfo *LoopInfo) 
+	doProcess(ctx *CommandContext, valueAndType *ValueAndType, loopInfo *LoopInfo)
 	stype() string
 	isImplementedSqlConnectorAdjustable() bool
 	getOrgAddress() interface{}
@@ -49,7 +49,7 @@ type RootNode struct {
 func (r *RootNode) stype() string {
 	return "RootNode"
 }
-func (r *RootNode) accept(ctx *CommandContext, node *Node)  {
+func (r *RootNode) accept(ctx *CommandContext, node *Node) {
 	for i := 0; i < r.GetChildSize(); i++ {
 		inter := r.GetChild(i)
 		//var node Node = *inter.(*Node)
@@ -70,7 +70,7 @@ type SqlPartsNode struct {
 func (r *SqlPartsNode) stype() string {
 	return "SqlPartsNode"
 }
-func (r *SqlPartsNode) accept(ctx *CommandContext, node *Node)  {
+func (r *SqlPartsNode) accept(ctx *CommandContext, node *Node) {
 	log.InternalDebug("SqlPartsNode accept")
 	(*ctx).addSql(r.sqlParts)
 	log.InternalDebug("SQL PART*" + r.sqlParts)
@@ -141,10 +141,10 @@ func (r *VariableNode) SetupVariable(expression string, testValue string, specif
 	r.blockNullParameter = blockNullParameter
 	r.nameList = splitList(expression, ".")
 }
-func (r *VariableNode) accept(ctx *CommandContext, node *Node)  {
+func (r *VariableNode) accept(ctx *CommandContext, node *Node) {
 	r.doAccept(ctx, nil, node)
 }
-func (r *VariableNode) doAccept(ctx *CommandContext, loopInfo *LoopInfo, node *Node)  {
+func (r *VariableNode) doAccept(ctx *CommandContext, loopInfo *LoopInfo, node *Node) {
 	firstName := r.nameList.Get(0)
 	//未実装
 	//assertFirstNameAsNormal(ctx, firstName);
@@ -196,7 +196,7 @@ func (r *BeginNode) stype() string {
 func (r *BeginNode) accept(ctx *CommandContext, node *Node) {
 	r.doAccept(ctx, nil)
 }
-func (r *BeginNode) doAccept(ctx *CommandContext, loopInfo *LoopInfo)  {
+func (r *BeginNode) doAccept(ctx *CommandContext, loopInfo *LoopInfo) {
 	childCtx := new(CommandContextImpl)
 	childCtx.parent = ctx
 	childCtx.beginChild = true
@@ -245,10 +245,10 @@ func (b *IfNode) isImplementedSqlConnectorAdjustable() bool {
 func (r *IfNode) stype() string {
 	return "IfNode"
 }
-func (r *IfNode) accept(ctx *CommandContext, node *Node)  {
+func (r *IfNode) accept(ctx *CommandContext, node *Node) {
 	r.doAcceptByEvaluator(ctx, nil)
 }
-func (r *IfNode) doAcceptByEvaluator(ctx *CommandContext, loopInfo *LoopInfo)  {
+func (r *IfNode) doAcceptByEvaluator(ctx *CommandContext, loopInfo *LoopInfo) {
 	cmap := (*ctx).GetArgs()
 	cmap = cmap
 	//fmt.Printf("ctx %v \n", len(cmap))
@@ -285,10 +285,10 @@ func (b *ElseNode) isImplementedSqlConnectorAdjustable() bool {
 func (r *ElseNode) stype() string {
 	return "ElseNode"
 }
-func (r *ElseNode) accept(ctx *CommandContext, node *Node)  {
+func (r *ElseNode) accept(ctx *CommandContext, node *Node) {
 	r.doAccept(ctx, nil)
 }
-func (r *ElseNode) doAccept(ctx *CommandContext, loopInfo *LoopInfo)  {
+func (r *ElseNode) doAccept(ctx *CommandContext, loopInfo *LoopInfo) {
 	r.processAcceptingChildren(ctx, loopInfo)
 	(*ctx).setEnabled(true)
 }
@@ -454,27 +454,27 @@ func (b *BindVariableNode) getCommentType() *CommentType {
 	}
 	return CMT_0
 }
-func (b *BindVariableNode) bindList(ctx*CommandContext,list *List){
-        (*ctx).addSql("(");
-        for validCount,currentElement:= range list.data {
-            if (currentElement != nil) {
-                if (validCount > 0) {
-                    (*ctx).addSql(", ");
-                }
-                (*ctx).addSqlSingle("?", currentElement,GetType(currentElement));
-            }
-        }
-        (*ctx).addSql(")");
+func (b *BindVariableNode) bindList(ctx *CommandContext, list *List) {
+	(*ctx).addSql("(")
+	for validCount, currentElement := range list.data {
+		if currentElement != nil {
+			if validCount > 0 {
+				(*ctx).addSql(", ")
+			}
+			(*ctx).addSqlSingle("?", currentElement, GetType(currentElement))
+		}
+	}
+	(*ctx).addSql(")")
 }
-func (b *BindVariableNode) doProcess(ctx *CommandContext, valueAndType *ValueAndType, loopInfo *LoopInfo)  {
+func (b *BindVariableNode) doProcess(ctx *CommandContext, valueAndType *ValueAndType, loopInfo *LoopInfo) {
 	finalValue := valueAndType.targetValue
 	finalType := valueAndType.targetType
 	if b.isInScope() {
 		if finalValue == nil { // in-scope does not allow null value
 			panic("BindOrEmbeddedCommentParameterNullValueException(valueAndType)")
 		}
-		var l *List =finalValue.(*List)
-		b.bindList(ctx,l)
+		var l *List = finalValue.(*List)
+		b.bindList(ctx, l)
 	} else {
 		(*ctx).addSqlSingle("?", finalValue, finalType) // if null, bind as null
 		//未実装
@@ -570,7 +570,7 @@ func (b *BaseNode) getOrgAddress() interface{} {
 func (b *BaseNode) isImplementedSqlConnectorAdjustable() bool {
 	return false
 }
-func (b *BaseNode) doProcess(ctx *CommandContext, valueAndType *ValueAndType, loopInfo *LoopInfo)  {
+func (b *BaseNode) doProcess(ctx *CommandContext, valueAndType *ValueAndType, loopInfo *LoopInfo) {
 	//dummy Only EmbenddedVariableNode and BindVariableNode required
 	log.InternalDebug("BaseNode Process")
 	return
@@ -680,9 +680,14 @@ func getPropertyValue(value interface{}, ctype string, currentName string) (stri
 	newv := v.FieldByName(InitCap(currentName))
 	log.InternalDebug(fmt.Sprintf("newv  %v \n", newv))
 	if newv.IsValid() == false {
+		fmt.Printf("value  %v %T\n", value, value)
+		fmt.Println("method" + InitCap(currentName))
 		test2 := reflect.ValueOf(value).MethodByName(InitCap(currentName))
 		if test2.IsValid() == false {
-			return "", nil
+			test2 = reflect.ValueOf(value).MethodByName("Get" + InitCap(currentName))
+			if test2.IsValid() == false {
+				return "", nil
+			}
 		}
 		nValuex := test2.Call([]reflect.Value{})
 		nValue := nValuex[0].Interface()
@@ -715,7 +720,7 @@ func (s *SqlConnectorNode) accept(ctx *CommandContext, node *Node) {
 	}
 	(*ctx).addSql(s.sqlParts)
 
-	return 
+	return
 }
 func (s *SqlConnectorNode) isMarkAlreadySkipped(ctx *CommandContext) bool {
 	return !s.independent && s.isBeginChildAndValidSql(ctx, s.sqlParts)

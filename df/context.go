@@ -62,7 +62,6 @@ func (c *CommandContextCreator) createCommandContext(args []interface{}) *Comman
 			}
 			if i < len(c.argNames) {
 				ctx.addArg(c.argNames[i], args[i], argType)
-				ctx.addArg(c.argNames[i], args[i], argType)
 			} else {
 				ctx.addArg("$"+strconv.Itoa(i+1), args[i], argType)
 			}

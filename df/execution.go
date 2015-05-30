@@ -450,6 +450,115 @@ func (t *TnAbstractEntityDynamicCommand) isOptimisticLockProperty(timestampProp 
 	return propertyName == timestampProp || propertyName == versionNoProp
 }
 
+type TnQueryUpdateDynamicCommand struct {
+	TnAbstractQueryDynamicCommand
+}
+
+func (t *TnQueryUpdateDynamicCommand) Execute(args []interface{}, tx *sql.Tx, behavior *Behavior) interface{} {
+	entity := (args[0]).(*Entity)
+	var entityi interface{} = *entity
+	entityx := reflect.ValueOf(entityi).Interface()
+	cb := args[1]
+	option := args[2]
+	argnames := []string{"entity", "pmb"}
+	argtypes := []string{GetType(entityx), GetType(cb)}
+	realArgs := []interface{}{entityx, cb}
+	twoWaySql := t.buildQueryUpdateTwoWaySql(entity, cb, option, t.propertyNames,
+		t.getModifiedPropertyNames(entity))
+	if twoWaySql == "" {
+		return int64(0)
+	}
+	creater := new(CommandContextCreator)
+	creater.argNames = argnames
+	creater.argTypes = argtypes
+	ctx := creater.createCommandContext(realArgs)
+	analyzer := new(SqlAnalyzer)
+	analyzer.Setup(twoWaySql, false)
+	node := analyzer.Analyze()
+	(*node).accept(ctx, nil)
+	//	(*ctx).addSqlSingle(twoWaySql,realArgs[0],argtypes[0])
+	//		(*ctx).addSqlSingle(twoWaySql,realArgs[1],argtypes[1])
+
+	handler := new(TnCommandContextHandler)
+	handler.CommandContext = ctx
+	handler.statementFactory = t.StatementFactory
+	res:=handler.Execute(realArgs, tx, behavior)
+	return res
+}
+func (t *TnQueryUpdateDynamicCommand) buildQueryUpdateTwoWaySql(
+	entity interface{}, cb interface{}, option interface{},
+	propertyNames *StringList, modifiedPropertyNames map[string]string) string {
+	entityx := entity.(*Entity)
+	dBMeta := (*entityx).GetDBMeta()
+	columnParameterKey := new(StringList)
+	columnParameterValue := new(StringList)
+	boundPropTypeList := new(StringList)
+	for _, ci := range (*dBMeta).GetColumnInfoList().data {
+		columnInfo := ci.(*ColumnInfo)
+		if columnInfo.OptimistickLock != "" {
+			continue // exclusive control columns are processed after here
+		}
+
+		//UpdateOption not implemented yet
+		//            if (option != null && option.hasStatement(columnDbName)) {
+		//                columnParameterMap.put(columnDbName, new SqlClause.QueryUpdateSetCalculationHandler() {
+		//                    public String buildStatement(String aliasName) {
+		//                        return option.buildStatement(columnDbName, aliasName);
+		//                    }
+		//                });
+		//                continue;
+		//            }
+		propertyName := columnInfo.PropertyName
+		if modifiedPropertyNames[propertyName] != "" {
+			value := GetEntityValue(entityx, propertyName)
+			if value != nil {
+				columnParameterKey.Add(propertyName)
+				columnParameterValue.Add("/*entity." + propertyName + "*/null")
+				boundPropTypeList.Add(GetType(value))
+			} else {
+				columnParameterKey.Add(propertyName)
+				columnParameterValue.Add("null")
+			}
+			continue
+		}
+	}
+	if columnParameterKey.Size() == 0 {
+		return ""
+	}
+	if (*dBMeta).HasVersionNo() {
+		columnInfo := (*dBMeta).GetVersionNoColumnInfo()
+		PropertyName := columnInfo.PropertyName
+		columnParameterKey.Add(PropertyName)
+		columnParameterValue.Add(
+			":Version:" + columnInfo.ColumnSqlName.ColumnSqlName + " + 1")
+	}
+	//UpdateOption not implemented yet
+	//	if option != null && option.isQueryUpdateForcedDirectAllowed() {
+	//		cb.getSqlClause().allowQueryUpdateForcedDirect()
+	//	}
+	fmt.Printf("cb %v %T \n", cb, cb)
+	cbbase := reflect.ValueOf(cb).Elem().FieldByName("BaseConditionBean").Interface()
+	cbir := reflect.ValueOf(cbbase).MethodByName("GetSqlClause").Call([]reflect.Value{})
+	sqlcr := cbir[0].Elem().MethodByName("GetClauseQueryUpdate").Call([]reflect.Value{
+		reflect.ValueOf(columnParameterKey), reflect.ValueOf(columnParameterValue)})
+	return sqlcr[0].String()
+}
+
+type TnAbstractQueryDynamicCommand struct {
+	targetDBMeta  *DBMeta
+	propertyNames *StringList
+	TnAbstractBasicSqlCommand
+}
+
+func (t *TnAbstractQueryDynamicCommand) getModifiedPropertyNames(entity *Entity) map[string]string {
+	set := make(map[string]string)
+	items := (*entity).GetModifiedPropertyNamesArray()
+	for _, item := range items {
+		set[item] = item
+	}
+	return set
+}
+
 type TnUpdateEntityDynamicCommand struct {
 	TnAbstractEntityDynamicCommand
 	optimisticLockHandling         bool
