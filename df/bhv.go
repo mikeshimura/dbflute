@@ -17,7 +17,7 @@ package df
 
 import (
 	"database/sql"
-	"errors"
+	//"errors"
 	"fmt"
 	"github.com/lib/pq"
 	"github.com/mikeshimura/dbflute/log"
@@ -36,16 +36,21 @@ type BaseBehavior struct {
 	TableDbName            string
 	Behavior               *Behavior
 }
-
+func (b *BaseBehavior) assertTx(tx *sql.Tx)  {
+	if tx==nil{
+		panic("transactionがありません")
+	}
+}
 func (b *BaseBehavior) DoSelectCount(cb interface{},
 	tx *sql.Tx) (reult int64, errrtn error) {
 	var err error
 	defer func() {
 		errx := recover()
 		if errx != nil {
-			errrtn = errors.New(fmt.Sprintf("%v", errx))
+			errrtn = fmt.Errorf("%v", errx)
 		}
 	}()
+	b.assertTx(tx)
 	cbbase := reflect.ValueOf(cb).Elem().FieldByName("BaseConditionBean").Interface()
 	var base *BaseConditionBean = cbbase.(*BaseConditionBean)
 	(*base.SqlClause).GetBaseSqlClause().selectClauseType = Create_SelectClauseType(
@@ -66,9 +71,10 @@ func (b *BaseBehavior) DoSelectList(cb interface{}, entityType string,
 	defer func() {
 		errx := recover()
 		if errx != nil {
-			errrtn = errors.New(fmt.Sprintf("%v", errx))
+			errrtn = fmt.Errorf("%v", errx)
 		}
 	}()
+	b.assertTx(tx)
 	cmd := b.CreateSelectListCBCommand(cb, entityType, tx)
 	var behcmd BehaviorCommand = cmd
 	invres := b.Invoke(&behcmd)
@@ -90,6 +96,7 @@ func (b *BaseBehavior) AsTableDbName() string {
 }
 
 func (b *BaseBehavior) DoSelectNextVal(tx *sql.Tx) int64 {
+	b.assertTx(tx)
 	invres := b.Invoke(b.createSelectNextValCommand(tx))
 	res := invres.(*ListResultBean)
 	var ent *D_Int64 = (res.List.Get(0)).(*D_Int64)
@@ -103,9 +110,10 @@ func (b *BaseBehavior) DoQueryDelete(cb interface{}, entityType string,
 		tt := GetType(errx)
 		fmt.Println(tt)
 		if errx != nil {
-			errrtn = errors.New(fmt.Sprintf("%v", errx))
+			errrtn = fmt.Errorf("%v", errx)
 		}
 	}()
+	b.assertTx(tx)
 	var invres interface{}
 	invres = b.Invoke(b.createQueryDeleteCBCommand(cb, entityType, option, tx))
 	if invres == nil {
@@ -119,9 +127,10 @@ func (b *BaseBehavior) DoDelete(entity *Entity, option *DeleteOption,
 	defer func() {
 		errx := recover()
 		if errx != nil {
-			errrtn = errors.New(fmt.Sprintf("%v", errx))
+			errrtn = fmt.Errorf("%v", errx)
 		}
 	}()
+	b.assertTx(tx)
 	b.processBeforeDelete(entity, option, tx, ctx)
 	var invres interface{}
 	invres = b.Invoke(b.createDeleteEntityCommand(entity, option, tx))
@@ -133,9 +142,10 @@ func (b *BaseBehavior) DoInsert(entity *Entity, option *InsertOption,
 	defer func() {
 		errx := recover()
 		if errx != nil {
-			errrtn = errors.New(fmt.Sprintf("%v", errx))
+			errrtn = fmt.Errorf("%v", errx)
 		}
 	}()
+	b.assertTx(tx)
 	b.processBeforeInsert(entity, option, tx, ctx)
 	var invres interface{}
 	invres = b.Invoke(b.createInsertEntityCommand(entity, option, tx))
@@ -147,9 +157,10 @@ func (b *BaseBehavior) DoQueryUpdate(entity *Entity, cb interface{},
 	defer func() {
 		errx := recover()
 		if errx != nil {
-			errrtn = errors.New(fmt.Sprintf("%v", errx))
+			errrtn = fmt.Errorf("%v", errx)
 		}
 	}()
+	b.assertTx(tx)
 	b.processBeforeQueryUpdate(entity, cb, option, ctx)
 	var invres interface{}
 	invres = b.Invoke(b.createQueryUpdateCBCommand(entity, cb, option, tx))
@@ -164,11 +175,11 @@ func (b *BaseBehavior) DoUpdate(entity *Entity, option *UpdateOption,
 	defer func() {
 		errx := recover()
 		if errx != nil {
-			errrtn = errors.New(fmt.Sprintf("%v", errx))
+			errrtn = fmt.Errorf("%v", errx)
 		}
 	}()
+	b.assertTx(tx)
 	b.processBeforeUpdate(entity, option, ctx)
-
 	var invres interface{}
 	invres = b.Invoke(b.createUpdateEntityCommand(entity, option, tx))
 	if invres == nil {

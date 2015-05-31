@@ -834,6 +834,11 @@ func (o *OutsideSqlBasicExecutor) createExecuteCommand(path string, pmb interfac
 	//        return cmd;
 	return &behaviorCommand
 }
+func (b *OutsideSqlBasicExecutor) assertTx(tx *sql.Tx)  {
+	if tx==nil{
+		panic("transactionがありません")
+	}
+}
 func (o *OutsideSqlBasicExecutor) SelectList(pmb interface{}, tx *sql.Tx) (bean *ListResultBean, errrtn error) {
 	var err error
 	defer func() {
@@ -841,9 +846,10 @@ func (o *OutsideSqlBasicExecutor) SelectList(pmb interface{}, tx *sql.Tx) (bean 
 		tt := GetType(errx)
 		fmt.Println(tt)
 		if errx != nil {
-			errrtn = errors.New(fmt.Sprintf("%v", errx))
+			errrtn = fmt.Errorf("%v", errx)
 		}
 	}()
+	o.assertTx(tx)
 	if pmb == nil {
 		return nil, errors.New("The argument 'pmb' (typed parameter-bean) should not be null.")
 	}
