@@ -107,8 +107,6 @@ func (b *BaseBehavior) DoQueryDelete(cb interface{}, entityType string,
 	var err error
 	defer func() {
 		errx := recover()
-		tt := GetType(errx)
-		fmt.Println(tt)
 		if errx != nil {
 			errrtn = fmt.Errorf("%v", errx)
 		}
