@@ -50,10 +50,11 @@ func (s *Stack) Pop() interface{} {
 
 }
 func CreateList() *List {
-	l:=new(List)
-	l.data=make([]interface{}, 0, 100)
+	l := new(List)
+	l.data = make([]interface{}, 0, 100)
 	return l
 }
+
 type List struct {
 	data []interface{}
 }
@@ -80,16 +81,20 @@ func (s *List) Size() int {
 	return len(s.data)
 }
 func (s *List) GetAsArray() []interface{} {
+	if s.data == nil {
+		s.data = make([]interface{}, 0, 100)
+	}
 	return s.data
 }
 func GetType(o interface{}) string {
 	return fmt.Sprintf("%T", o)
 }
 func CreateStringList() *StringList {
-	l:=new(StringList)
-	l.data=make([]string, 0, 100)
+	l := new(StringList)
+	l.data = make([]string, 0, 100)
 	return l
 }
+
 type StringList struct {
 	data []string
 }
@@ -113,6 +118,9 @@ func (s *StringList) Get(i int) string {
 	}
 }
 func (s *StringList) GetAsArray() []string {
+	if s.data == nil {
+		s.data = make([]string, 0, 50)
+	}
 	return s.data
 }
 func (s *StringList) Size() int {
