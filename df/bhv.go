@@ -454,6 +454,26 @@ func (t *TnStatementFactoryImpl) ModifyBindVariables(bindVariables *List,
 			xtime := item.(*Timestamp)
 			bindVariables.data[i] = xtime.Timestamp.Format(C_DISP_SQL_DEFAULT_TIMESTAMP_FORMAT)
 		}
+		if stype == "df.Date" {
+			xtime := item.(Date)
+			bindVariables.data[i] = xtime.Date.Format(C_DISP_SQL_DEFAULT_DATE_FORMAT)
+		}
+		if stype == "*df.Date" {
+			xtime := item.(*Date)
+			bindVariables.data[i] = xtime.Date.Format(C_DISP_SQL_DEFAULT_DATE_FORMAT)
+		}
+		if stype == "df.NullDate" {
+			xtime := item.(NullDate)
+			if xtime.Valid {
+				bindVariables.data[i] = xtime.Date.Format(C_DISP_SQL_DEFAULT_DATE_FORMAT)
+			}
+		}
+		if stype == "*df.NullDate" {
+			xtime := item.(*NullDate)
+			if xtime.Valid {
+				bindVariables.data[i] = xtime.Date.Format(C_DISP_SQL_DEFAULT_DATE_FORMAT)
+			}
+		}
 	}
 	return bindVariables
 }
