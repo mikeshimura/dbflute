@@ -32,7 +32,6 @@ var LogWarnFunc = seeWarn
 var LogCriticalFunc = seeCritical
 var LogFlushFunc = seeFlush
 
-var charCode = "sjis"
 var timeFormat = "2006/01/02 15:04:05.000 +0900"
 
 func seeInfo(param string) {
@@ -59,9 +58,7 @@ func seeCritical(param string) {
 func seeFlush() {
 	seelog.Flush()
 }
-func SetCharCode(code string) {
-	charCode = code
-}
+
 func SetTimeFormat(format string) {
 	timeFormat = format
 }
@@ -71,9 +68,9 @@ func InternalDebug(log string) {
 		return
 	}
 	if InternalDebugTest {
-		fmt.Println("InternalDebug" + ":" + convErr(log))
+		fmt.Println("InternalDebug" + ":" + log)
 	} else {
-		LogDebugFunc("InternalDebug" + ":" + convErr(log))
+		LogDebugFunc("InternalDebug" + ":" + log)
 	}
 }
 func Flush() {
@@ -94,28 +91,7 @@ func Error(pack string, log string) {
 func Critical(pack string, log string) {
 	LogCriticalFunc(pack + ":" + log)
 }
-func InfoConv(pack string, log string) {
-	LogInfoFunc(pack + ":" + convErr(log))
-}
-func DebugConv(pack string, log string) {
-	LogDebugFunc(pack + ":" + convErr(log))
-}
-func WarnConv(pack string, log string) {
-	LogWarnFunc(pack + ":" + convErr(log))
-}
-func ErrorConv(pack string, log string) {
-	LogErrorFunc(pack + ":" + convErr(log))
-}
-func CriticalConv(pack string, log string) {
-	LogCriticalFunc(pack + ":" + convErr(log))
-}
-func convErr(log string) string {
-	if charCode != "utf-8" {
-		res, _ := ConvertUtf(log, charCode)
-		return res
-	}
-	return log
-}
+
 
 func IsEnabled() bool {
 	return isEnabled
