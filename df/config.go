@@ -27,11 +27,11 @@ var LogStop bool
 
 func DFLog(logstr string) {
 	if !LogStop {
-		log.DebugConv("dfLog", logstr)
+		log.Debug("dfLog", logstr)
 	}
 }
 func DFErrorLog(logstr string) {
-	log.ErrorConv("dfLog", logstr)
+	log.Error("dfLog", logstr)
 }
 
 func TxBegin(db *sql.DB) (*sql.Tx, error) {
