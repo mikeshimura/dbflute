@@ -92,7 +92,6 @@ func Critical(pack string, log string) {
 	LogCriticalFunc(pack + ":" + log)
 }
 
-
 func IsEnabled() bool {
 	return isEnabled
 }
