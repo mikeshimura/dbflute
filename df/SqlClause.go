@@ -249,7 +249,7 @@ func (b *BaseSqlClause) buildQueryUpdateDirectClause(
 	//            sb.append(whereClause);
 	//        } else {
 	sb.WriteString(b.filterQueryUpdateBasePointAliasNameLocalUnsupported(whereClause))
-	fmt.Println("sb:" + sb.String())
+	//fmt.Println("sb:" + sb.String())
 
 	panic("buildQueryUpdateDirectClause")
 
@@ -276,7 +276,7 @@ func (b *BaseSqlClause) buildQueryUpdateInScopeClause(
 	dbmeta *DBMeta, sb *bytes.Buffer) {
 
 	b.buildQueryUpdateSetClause(columnParameterKey, columnParameterValue, dbmeta, sb, "")
-	fmt.Println("sb:" + sb.String())
+	//fmt.Println("sb:" + sb.String())
 	primaryKeyName := ((*dbmeta).GetPrimaryUniqueInfo().UniqueColumnList.Get(0)).(*ColumnInfo).ColumnSqlName.ColumnSqlName
 	columnSqlName := ((*dbmeta).GetPrimaryUniqueInfo().UniqueColumnList.Get(0)).(*ColumnInfo).ColumnSqlName.ColumnSqlName
 	selectClause := "select " + b.GetBasePorintAliasName() + "." + columnSqlName
@@ -342,7 +342,7 @@ func (b *BaseSqlClause) buildQueryUpdateSetClause(
 	for index, propertyName := range columnParameterKey.data {
 		parameter := columnParameterValue.Get(index)
 		isVersionColumn, versionParameter := b.checkVersionColumn(parameter)
-		fmt.Println("propertyName" + propertyName)
+		//fmt.Println("propertyName" + propertyName)
 		columnInfo := (*dbmeta).GetColumnInfoByPropertyName(propertyName)
 		columnSqlName := columnInfo.ColumnSqlName.ColumnSqlName
 		if index == 0 {

@@ -681,8 +681,8 @@ func getPropertyValue(value interface{}, ctype string, currentName string) (stri
 	newv := v.FieldByName(InitCap(currentName))
 	log.InternalDebug(fmt.Sprintf("newv  %v \n", newv))
 	if newv.IsValid() == false {
-		fmt.Printf("value  %v %T\n", value, value)
-		fmt.Println("method" + InitCap(currentName))
+		//fmt.Printf("value  %v %T\n", value, value)
+		//fmt.Println("method" + InitCap(currentName))
 		test2 := reflect.ValueOf(value).MethodByName(InitCap(currentName))
 		if test2.IsValid() == false {
 			test2 = reflect.ValueOf(value).MethodByName("Get" + InitCap(currentName))
