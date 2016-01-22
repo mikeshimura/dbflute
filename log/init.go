@@ -18,7 +18,7 @@ func init() {
     </formats>
 </seelog>
 `
-	fmt.Println("Log Init")
+	//fmt.Println("Log Init")
 	path := ""
 	logPath := os.Getenv("LOGPATH")
 	goPath := os.Getenv("GOPATH")
