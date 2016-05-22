@@ -60,6 +60,7 @@ type SqlClausePostgres struct {
 }
 
 func (p *SqlClausePostgres) DoFetchPage() {
+	
 	p.fetchScopeSqlSuffix = " limit " + strconv.Itoa(p.fetchSize) + " offset " + strconv.Itoa(p.getPageStartIndex())
 }
 func (p *SqlClausePostgres) DoClearFetchPageClause() {

@@ -74,6 +74,7 @@ type SqlClause interface {
 	DoClearFetchPageClause()
 	DoFetchFirst()
 	FetchFirst(fetchSize int)
+	Offset(offsetSize int)
 	CreateFromHint() string
 	CreateSqlSuffix() string
 	CreateSelectHint() string
@@ -123,6 +124,7 @@ type BaseSqlClause struct {
 	fetchStartIndex                    int
 	fetchSize                          int
 	fetchPageNumber                    int
+	offset                             int
 	sqlClause                          *SqlClause
 	subQueryIndentProcessor            *SubQueryIndentProcessor
 }
@@ -386,7 +388,21 @@ func (b *BaseSqlClause) FetchFirst(fetchSize int) {
 	(*b.sqlClause).DoClearFetchPageClause()
 	(*b.sqlClause).DoFetchFirst()
 }
+func (b *BaseSqlClause) Offset(offset int) {
+	b.fetchScopeEffective = true
+	if offset < 0 {
+		panic("Argument[offset] should be plus")
+	}
+	//fmt.Printf("Offset set %v\n",offset)
+	b.offset = offset
+	(*b.sqlClause).DoClearFetchPageClause()
+	(*b.sqlClause).DoFetchFirst()
+}
 func (b *BaseSqlClause) getPageStartIndex() int {
+	//fmt.Printf("ofset %v \n",b.offset)
+	if b.offset > 0 {
+		return b.offset
+	}
 	if b.fetchPageNumber <= 0 {
 		panic("fetchPageNumber must be plus ")
 	}

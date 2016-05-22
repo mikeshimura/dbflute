@@ -17,7 +17,7 @@ package df
 
 import (
 	"errors"
-	//"fmt"
+	"fmt"
 	"reflect"
 )
 
@@ -62,6 +62,7 @@ func GetEntityValue(entity *Entity, property string) interface{} {
 	return (*entity).GetAsInterfaceArray()[cno]
 }
 func SetEntityValue(entity *Entity, property string, value interface{}) bool {
+	defer panicdump(entity,property,value)
 	var entityi interface{} = *entity
 	v := reflect.ValueOf(entityi)
 	m := v.MethodByName("Set" + InitCap(property))
@@ -77,7 +78,16 @@ func SetEntityValue(entity *Entity, property string, value interface{}) bool {
 	m.Call([]reflect.Value{reflect.ValueOf(value)})
 	return true
 }
-
+func panicdump(entity *Entity, property string, value interface{}){
+		errx := recover()
+	if errx != nil {
+		errs := fmt.Sprintf("%v", errx)
+		fmt.Printf("entity set error %v entity %v property %v value %v\n",errs,
+			entity,property,value)
+		
+		panic(errs)
+	}
+}
 type EntityModifiedProperties struct {
 	propertyNameMap map[string]bool
 }
