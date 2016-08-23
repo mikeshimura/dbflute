@@ -19,6 +19,7 @@ import (
 	"errors"
 	"fmt"
 	"reflect"
+	"github.com/streamrail/concurrent-map"
 )
 
 //Entityは必ず以下のTypeの内どれか
@@ -89,30 +90,39 @@ func panicdump(entity *Entity, property string, value interface{}){
 	}
 }
 type EntityModifiedProperties struct {
-	propertyNameMap map[string]bool
+	propertyNameMap cmap.ConcurrentMap
 }
 
 func (e *EntityModifiedProperties) AddPropertyName(property string) error {
 	if e.propertyNameMap == nil {
-		e.propertyNameMap = make(map[string]bool)
+		e.propertyNameMap = cmap.New()
 	}
 	if len(property) == 0 {
 		return errors.New("df005:Property length 0")
 	}
-	e.propertyNameMap[property] = true
+	e.propertyNameMap.Set(property,true)
+	//e.propertyNameMap[property] = true
 	return nil
 }
 func (e *EntityModifiedProperties) GetModifiedPropertyNamesArray() []string {
 	keys := make([]string, 0, len(e.propertyNameMap))
-	for k := range e.propertyNameMap {
-		keys = append(keys, k)
+//	for k := range e.propertyNameMap {
+//		keys = append(keys, k)
+//	}
+	for k :=range e.propertyNameMap.Iter(){
+		keys = append(keys,k.Key)
 	}
 	return keys
 }
 func (e *EntityModifiedProperties) IsModifiedProperty(property string) bool {
-	_, ok := e.propertyNameMap[property]
-	return ok
+	//_, ok := e.propertyNameMap[property]
+	v,ok:=e.propertyNameMap.Get(property)
+	if ok == false{
+		return false
+	}
+	return v.(bool)
 }
 func (e *EntityModifiedProperties) PropertyNameMapClear() {
-	e.propertyNameMap = make(map[string]bool)
+	//e.propertyNameMap = make(map[string]bool)
+	e.propertyNameMap=cmap.New()
 }
