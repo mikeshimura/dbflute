@@ -58,6 +58,9 @@ func CreateList() *List {
 type List struct {
 	data []interface{}
 }
+func (s *List) Reset() {
+	s.data = make([]interface{}, 0, 100)
+}
 
 func (s *List) Add(value interface{}) {
 	if s.data == nil {
