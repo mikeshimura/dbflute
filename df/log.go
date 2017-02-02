@@ -20,11 +20,12 @@ import (
 	//	"strings"
 	"database/sql"
 	"fmt"
-	"github.com/lib/pq"
-	"github.com/mikeshimura/dbflute/log"
 	"reflect"
 	"strconv"
 	"time"
+
+	"github.com/lib/pq"
+	"github.com/mikeshimura/dbflute/log"
 )
 
 const (
@@ -473,12 +474,18 @@ func IsNotNull(arg interface{}) bool {
 
 	}
 }
+func TrancateString(s string)string{
+	if len(s)>1000{
+		s=s[0:997]+"..."
+	}
+	return s
+}
 func InterfaceToString(arg interface{}) string {
 	switch arg.(type) {
 	case string:
-		return arg.(string)
+		return TrancateString(arg.(string))
 	case *string:
-		return *arg.(*string)
+		return TrancateString(*arg.(*string))
 	case int64:
 		int64v := arg.(int64)
 		return strconv.Itoa(int(int64v))
@@ -542,13 +549,13 @@ func InterfaceToString(arg interface{}) string {
 	case sql.NullString:
 		nsv := arg.(sql.NullString)
 		if nsv.Valid {
-			return nsv.String
+			return TrancateString(nsv.String)
 		}
 		return "null"
 	case *sql.NullString:
 		nsv := arg.(*sql.NullString)
 		if nsv.Valid {
-			return (*nsv).String
+			return TrancateString((*nsv).String)
 		}
 		return "null"
 		//	case NullString:
