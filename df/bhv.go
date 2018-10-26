@@ -232,7 +232,7 @@ func (b *BaseBehavior) createQueryDeleteCBCommand(cb interface{},
 
 func (b *BaseBehavior) createQueryUpdateCBCommand(entity *Entity, cb interface{},
 	option *UpdateOption, tx *sql.Tx) *BehaviorCommand {
-	//	        assertBehaviorCommandInvoker("createUpdateEntityCommand");
+	//	        assertBehaviorCommandInvoker("createUpdateEntityCommand")
 	cmd := new(QueryUpdateCBCommand)
 	cmd.StatementFactory = (*b.BehaviorCommandInvoker.InvokerAssistant).
 		GetStatementFactory()

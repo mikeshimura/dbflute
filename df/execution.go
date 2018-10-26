@@ -534,6 +534,7 @@ func (t *TnQueryUpdateDynamicCommand) Execute(args []interface{}, tx *sql.Tx, be
 func (t *TnQueryUpdateDynamicCommand) buildQueryUpdateTwoWaySql(
 	entity interface{}, cb interface{}, option interface{},
 	propertyNames *StringList, modifiedPropertyNames map[string]string) string {
+
 	entityx := entity.(*Entity)
 	dBMeta := (*entityx).GetDBMeta()
 	columnParameterKey := new(StringList)
@@ -587,6 +588,7 @@ func (t *TnQueryUpdateDynamicCommand) buildQueryUpdateTwoWaySql(
 	cbir := reflect.ValueOf(cbbase).MethodByName("GetSqlClause").Call([]reflect.Value{})
 	sqlcr := cbir[0].Elem().MethodByName("GetClauseQueryUpdate").Call([]reflect.Value{
 		reflect.ValueOf(columnParameterKey), reflect.ValueOf(columnParameterValue)})
+
 	return sqlcr[0].String()
 }
 

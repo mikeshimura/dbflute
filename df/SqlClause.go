@@ -133,6 +133,9 @@ func (b *BaseSqlClause) GetClauseQueryDelete() string {
 	dbmeta := b.DBMeta
 	sb := new(bytes.Buffer)
 	sb.WriteString("delete")
+	if GetDbCode(dbmeta)=="mysql" {
+		sb.WriteString(" dfloc")
+	}
 	useQueryUpdateDirect := b.isUseQueryUpdateDirect(dbmeta)
 	whereClause := ""
 	if useQueryUpdateDirect { // prepare for direct case
@@ -192,7 +195,18 @@ func (b *BaseSqlClause) isUseQueryUpdateDirect(dbmeta *DBMeta) bool {
 	//return _queryUpdateForcedDirectAllowed || !canUseQueryUpdateInScope(dbmeta);
 	return !b.canUseQueryUpdateInScope(dbmeta)
 }
+func GetDbCode(dbmeta *DBMeta) string{
+	dbc:=(*dbmeta).GetDbCurrent()
+	dbdef:=dbc.DBDef
+	return (*dbdef).Code()
+}
 func (b *BaseSqlClause) canUseQueryUpdateInScope(dbmeta *DBMeta) bool {
+//	dbc:=(*dbmeta).GetDbCurrent()
+//	dbdef:=dbc.DBDef
+	if GetDbCode(dbmeta)=="mysql" {
+		return false;
+	}
+	//fmt.Printf("canUseQueryUpdateInScope myusql? %v\n",(*dbdef).Code())
 	return b.isUpdateSubQueryUseLocalTableSupported() && !(*dbmeta).HasCompoundPrimaryKey()
 }
 
@@ -205,7 +219,7 @@ func (b *BaseSqlClause) buildQueryUpdateDirectClause(
 	//        if (hasUnionQuery()) {
 	//            throwQueryUpdateUnavailableFunctionException("union", dbmeta);
 	//        }
-	useAlias := false
+	useAlias := true
 	//if (b.isUpdateTableAliasNameSupported()) {
 	//            if (hasQueryUpdateSubQueryPossible(whereClause)) {
 	//                useAlias = true;
@@ -247,13 +261,14 @@ func (b *BaseSqlClause) buildQueryUpdateDirectClause(
 		return
 	}
 
-	//        if (useAlias) {
-	//            sb.append(whereClause);
-	//        } else {
-	sb.WriteString(b.filterQueryUpdateBasePointAliasNameLocalUnsupported(whereClause))
-	//fmt.Println("sb:" + sb.String())
+	if useAlias {
+		sb.WriteString(whereClause)
+	} else {
+		sb.WriteString(b.filterQueryUpdateBasePointAliasNameLocalUnsupported(whereClause))
+		//fmt.Println("sb:" + sb.String())
 
-	panic("buildQueryUpdateDirectClause")
+		panic("buildQueryUpdateDirectClause")
+	}
 
 }
 func (b *BaseSqlClause) filterQueryUpdateBasePointAliasNameLocalUnsupported(

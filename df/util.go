@@ -171,12 +171,6 @@ func CreateNullTimestamp(v time.Time) NullTimestamp {
 	nt.Timestamp = v
 	return nt
 }
-func CreateMysqlNullTimestamp(v time.Time) MysqlNullTimestamp {
-	var nt MysqlNullTimestamp
-	nt.Valid = true
-	nt.Timestamp = v
-	return nt
-}
 func CreateDate(v time.Time) Date {
 	var nt Date
 	nt.Date = v

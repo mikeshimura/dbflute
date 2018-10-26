@@ -492,6 +492,7 @@ func (u *QueryUpdateCBCommand) createQueryEntityCBExecution(dbmeta *DBMeta) *Sql
 func (u *QueryUpdateCBCommand) createQueryUpdateDynamicCommand(
 	propertyNames *StringList, dbmeta *DBMeta) *TnQueryUpdateDynamicCommand {
 	cmd := new(TnQueryUpdateDynamicCommand)
+
 	var sqlExecution SqlExecution = cmd
 	cmd.sqlExecution = &sqlExecution
 	cmd.rc = u.rc
