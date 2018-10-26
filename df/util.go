@@ -159,6 +159,12 @@ func CreateNullTime(v time.Time) pq.NullTime {
 	nt.Time = v
 	return nt
 }
+func CreateMysqlNullTimestamp(v time.Time) MysqlNullTimestamp {
+	var nt MysqlNullTimestamp
+	nt.Valid = true
+	nt.Timestamp = v
+	return nt
+}
 func CreateNullDate(v time.Time) NullDate {
 	var nt NullDate
 	nt.Valid = true
