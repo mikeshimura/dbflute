@@ -805,7 +805,8 @@ func (o *OutsideSqlBasicExecutor) Execute(pmb interface{}, tx *sql.Tx) (res int6
 	defer func() {
 		errx := recover()
 		if errx != nil {
-			errrtn = errors.New(errx.(string))
+			errrtn = errors.New(fmt.Sprintf("%v",errx))
+			//errrtn = errors.New(errx.(runtime.ErrorString))
 		}
 	}()
 	path := reflect.ValueOf(pmb).MethodByName("GetOutsideSqlPath").Call([]reflect.Value{})[0].Interface().(string)

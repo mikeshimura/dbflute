@@ -36,6 +36,12 @@ type TnBasicUpdateHandler struct {
 }
 
 func (t *TnBasicUpdateHandler) execute(bindVariables *List, bindVariableTypes *StringList, tx *sql.Tx, behavior *Behavior) interface{} {
+	if bindVariables==nil{
+		bindVariables=CreateList()
+	}
+	if bindVariableTypes==nil{
+		bindVariableTypes=CreateStringList()
+	}
 	dbc := (*(*behavior).GetBaseBehavior().GetBehaviorCommandInvoker().InvokerAssistant).GetDBCurrent()
 
 	ps := (*t.statementFactory).PrepareStatement(t.sql, tx, dbc)
@@ -46,7 +52,10 @@ func (t *TnBasicUpdateHandler) execute(bindVariables *List, bindVariableTypes *S
 	//	ns.Valid=true
 	//	ns.String="2"
 	//	var itest interface{}=ns
-	t.logSql(bindVariables, bindVariableTypes)
+	if bindVariables!=nil && bindVariableTypes!=nil{
+		t.logSql(bindVariables, bindVariableTypes)
+	}
+
 	res, err := tx.Stmt(ps).Exec(bindVar.data...)
 	if err != nil {
 		panic(err.Error())
